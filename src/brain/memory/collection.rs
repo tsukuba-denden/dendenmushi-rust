@@ -24,6 +24,7 @@ pub struct Channel {
     pub settings: Settings,
     pub messages: Vec<MessageEntry>,
     pub schedule: CEvent,
+    pub block: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -91,6 +92,7 @@ impl Channel {
             settings: Settings::new(),
             messages: Vec::new(),
             schedule: CEvent::new(),
+            block: false,
         }
     }
 

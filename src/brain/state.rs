@@ -17,6 +17,8 @@ pub enum Event {
 
 pub enum Response {
     Text(String),
+    Processing,
+    Thinking(String),
 }
 
 impl State {
