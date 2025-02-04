@@ -15,6 +15,10 @@ pub enum Event {
     RxMessage(String),
 }
 
+pub enum Command {
+    
+}
+
 pub enum Response {
     Text(String),
     Processing,

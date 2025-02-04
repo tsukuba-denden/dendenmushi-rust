@@ -114,6 +114,38 @@ impl CEvent {
         &self.timer
     }
 
+    pub fn rem_user_join(&mut self) {
+        self.user_join = None;
+    }
+
+    pub fn rem_user_leave(&mut self) {
+        self.user_leave = None;
+    }
+
+    pub fn rem_user_tx(&mut self) {
+        self.user_tx = None;
+    }
+
+    pub fn rem_rx_url(&mut self) {
+        self.rx_url = None;
+    }
+
+    pub fn rem_rx_image(&mut self) {
+        self.rx_image = None;
+    }
+
+    pub fn rem_rx_video(&mut self) {
+        self.rx_video = None;
+    }
+
+    pub fn rem_rx_audio(&mut self) {
+        self.rx_audio = None;
+    }
+
+    pub fn rem_rx_file(&mut self) {
+        self.rx_file = None;
+    }
+
     pub fn rem_re_message(&mut self, index: usize) -> Result<(), ObsError> {
         if index < self.re_message.len() {
             self.re_message.remove(index);
@@ -130,6 +162,27 @@ impl CEvent {
         } else {
             Err(ObsError::IndexOutOfBounds)
         }
+    }
+
+    pub fn clear_re_message(&mut self) {
+        self.re_message.clear();
+    }
+
+    pub fn clear_timer(&mut self) {
+        self.timer.clear();
+    }
+
+    pub fn clear_all(&mut self) {
+        self.user_join = None;
+        self.user_leave = None;
+        self.user_tx = None;
+        self.rx_url = None;
+        self.rx_image = None;
+        self.rx_video = None;
+        self.rx_audio = None;
+        self.rx_file = None;
+        self.re_message.clear();
+        self.timer.clear();
     }
 }
 

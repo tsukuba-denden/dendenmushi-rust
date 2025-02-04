@@ -10,4 +10,9 @@ impl State {
 
         Err(ObsError::IndexOutOfBounds)
     }
+
+    pub async fn handle_command<F>(&self, progress: F, command: String, ch_id: &str, ch_name: &str) -> Result<Response, ObsError> 
+    where F: Fn(Response)
+    {
+        //self.memory.
 }
