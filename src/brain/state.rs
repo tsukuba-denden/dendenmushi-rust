@@ -16,7 +16,9 @@ pub enum Event {
 }
 
 pub enum Command {
-    
+    Enable,
+    Disable,
+    Info,
 }
 
 pub enum Response {

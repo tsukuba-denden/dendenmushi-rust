@@ -12,6 +12,7 @@ pub enum ObsError {
     IoError(std::io::Error),
     // 他のエラー型も必要に応じて追加可能
     IndexOutOfBounds,
+    UnknownError,
 }
 
 impl fmt::Display for ObsError {
@@ -21,6 +22,7 @@ impl fmt::Display for ObsError {
             ObsError::InvalidInput(ref msg) => write!(f, "InvalidInput: {}", msg),
             ObsError::IoError(ref err) => write!(f, "IoError: {}", err),
             ObsError::IndexOutOfBounds => write!(f, "Index out of bounds"),
+            ObsError::UnknownError => write!(f, "Unknown error"),
         }
     }
 }
