@@ -25,5 +25,5 @@ pub trait Tool {
     /// 関数のパラメータの定義(json schema)  
     fn def_parameters(&self) -> serde_json::Value;
     /// 関数の実行  
-    fn run(&self, args: serde_json::Value) -> String;
+    fn run(&self, args: serde_json::Value) -> Result<String, String>;
 }

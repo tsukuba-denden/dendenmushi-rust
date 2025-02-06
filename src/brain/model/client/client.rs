@@ -1,8 +1,9 @@
-use std::{collections::HashMap, f32::consts::E};
+use std::collections::HashMap;
 
-use reqwest::{Client, Response};
+use reqwest::Client;
+use serde_json::json;
 
-use super::{api::{APIRequest, APIResponse, APIResponseHeaders}, err::ClientError, function::{FunctionDef, Tool}, prompt::{Choice, Message}};
+use super::{api::{APIRequest, APIResponse, APIResponseHeaders}, err::ClientError, function::{FunctionDef, Tool}, prompt::{Message, MessageContext}};
 
 /// ルート構造体  
 pub struct OpenAIClient {
@@ -12,9 +13,21 @@ pub struct OpenAIClient {
     pub tools: HashMap<String, (Box<dyn Tool>, bool/* enable */)>,
 }
 
-struct OpenAIClientState<'a> {
+pub struct OpenAIClientState<'a> {
     pub prompt: Vec<Message>,
     pub client: &'a OpenAIClient,
+}
+
+pub struct ModelConfig {
+    pub model: String,
+    pub temp: Option<f64>,
+    pub max_token: Option<u64>,
+    pub top_p: Option<f64>,
+}
+
+pub struct APIResult {
+    pub response: APIResponse,
+    pub headers: APIResponseHeaders,
 }
 
 impl OpenAIClient {
@@ -72,11 +85,41 @@ impl OpenAIClient {
         defs
     }
 
-    pub fn send_with_tool(&self, prompt: &Vec<Message>, tool_name: &str) -> Result<Choice, ClientError> {
-        let tool = self.tools.get(tool_name).ok_or(ClientError::ToolNotFound)?;
+    pub async fn send(&self, model: &ModelConfig, prompt: &Vec<Message>) -> Result<APIResult, ClientError> {
+        match self.call_api(&model.model, prompt, None, model.temp, model.max_token, model.top_p).await {
+            Ok(res) => {
+                return Ok(res);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
 
+    pub async fn send_use_tool(&self, model: &ModelConfig, prompt: &Vec<Message>) -> Result<APIResult, ClientError> {
+        match self.call_api(&model.model, prompt, Some(&serde_json::Value::String("auto".to_string())), model.temp, model.max_token, model.top_p).await {
+            Ok(res) => {
+                return Ok(res);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
 
-        Err(ClientError::UnknownError)
+    pub async fn send_with_tool(&self, model: &ModelConfig, prompt: &Vec<Message>, tool_name: &str) -> Result<APIResult, ClientError> {
+        let function_call = serde_json::json!({
+            "name": tool_name,
+        });
+
+        match self.call_api(&model.model, prompt, Some(&function_call), model.temp, model.max_token, model.top_p).await {
+            Ok(res) => {
+                return Ok(res);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
     }
 
     /// APIを呼び出す  
@@ -87,7 +130,15 @@ impl OpenAIClient {
     /// - "auto"  
     /// - "none"  
     /// - { "name": "get_weather" }  
-    pub async fn call_api(&self, model: &str, prompt: &Vec<Message>, function_call: Option<&serde_json::Value>, temp: Option<f64>, max_token: Option<u64>, top_p: Option<f64>) -> Result<(APIResponse, APIResponseHeaders), ClientError> {
+    pub async fn call_api(
+        &self, 
+        model: &str, 
+        prompt: &Vec<Message>, 
+        function_call: Option<&serde_json::Value>, 
+        temp: Option<f64>, max_token: Option<u64>, 
+        top_p: Option<f64>) 
+        -> Result<APIResult, ClientError> 
+        {
         let url = format!("{}/v1/chat/completions", self.end_point);
         if !url.starts_with("https://") {
             return Err(ClientError::InvalidEndpoint);
@@ -120,7 +171,10 @@ impl OpenAIClient {
 
         let response_body: APIResponse = res.json().await.map_err(|_| ClientError::InvalidResponse)?;
 
-        Ok((response_body, headers))
+        Ok(APIResult {
+            response: response_body,
+            headers,
+        })
     }
 
     /// プロンプトを生成  
@@ -136,10 +190,121 @@ impl<'a> OpenAIClientState<'a> {
     /// メッセージを追加  
     /// messages: メッセージのリスト  
     /// return: self  
-    pub fn add(&mut self, messages: Vec<Message>) -> &mut Self {
+    pub async fn add(&mut self, messages: Vec<Message>) -> &mut Self {
         self.prompt.extend(messages);
         self
     }
 
+    /// メッセージをクリア  
+    /// return: self
+    pub async fn clear(&mut self) -> &mut Self {
+        self.prompt.clear();
+        self
+    }
 
+    /// 最後のメッセージを取得  
+    pub async fn last(&mut self) -> Option<&Message> {
+        self.prompt.last()
+    }
+
+
+    /// AIが応答を生成
+    pub async fn generate(&mut self, model: &ModelConfig) -> Result<&mut Self, ClientError> {
+        let result = self.client.send(model, &self.prompt).await?;
+        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
+        let choice = choices.get(0).ok_or(ClientError::InvalidResponse)?;
+
+        if choice.message.content.is_some() {
+            let content = choice.message.content.as_ref().unwrap().clone();
+            self.add(vec![Message {
+                role: "assistant".to_string(),
+                content: vec![MessageContext::Text(content)],
+            }])
+            .await;
+        } else {
+            return Err(ClientError::UnknownError);
+        }
+
+        Ok(self)
+    }
+
+    /// AIが応答を生成  
+    /// toolを使用することもある  
+    pub async fn generate_use_tool(&mut self, model: &ModelConfig) -> Result<&mut Self, ClientError> {
+        let result = self.client.send_use_tool(model, &self.prompt).await?;
+        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
+        let choice = choices.get(0).ok_or(ClientError::InvalidResponse)?;
+
+        if choice.message.content.is_some() {
+            let content = choice.message.content.as_ref().unwrap().clone();
+            self.add(vec![Message {
+            role: "assistant".to_string(),
+            content: vec![MessageContext::Text(content)],
+            }])
+            .await;
+        } else if choice.message.function_call.is_some() {
+            let fnc = choice.message.function_call.as_ref().unwrap();
+            let (tool, enabled) = self.client.tools.get(&fnc.name).ok_or(ClientError::ToolNotFound)?;
+            if !*enabled {
+                return Err(ClientError::ToolNotFound);
+            }
+            if let Ok(res) = tool.run(fnc.arguments.clone()) {
+                self.add(vec![Message {
+                    role: "function".to_string(),
+                    content: vec![MessageContext::Text(res)],
+                }])
+                .await;
+            } else if let Err(e) = tool.run(fnc.arguments.clone()) {
+                self.add(vec![Message {
+                    role: "function".to_string(),
+                    content: vec![MessageContext::Text(format!("Error: {}", e))],
+                }])
+                .await;
+            }
+        } else {
+            return Err(ClientError::UnknownError);
+        }
+
+        Ok(self)
+    }
+
+    /// AIが応答を生成
+    /// tool使用を強制
+    pub async fn generate_with_tool(&mut self, model: &ModelConfig, tool_name: &str) -> Result<&mut Self, ClientError> {
+        let result = self.client.send_with_tool(model, &self.prompt, tool_name).await?;
+        let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
+        let choice = choices.get(0).ok_or(ClientError::InvalidResponse)?;
+
+        if choice.message.content.is_some() {
+            let content = choice.message.content.as_ref().unwrap().clone();
+            self.add(vec![Message {
+                role: "assistant".to_string(),
+                content: vec![MessageContext::Text(content)],
+            }])
+            .await;
+        } else if choice.message.function_call.is_some() {
+            let fnc = choice.message.function_call.as_ref().unwrap();
+            let (tool, enabled) = self.client.tools.get(&fnc.name).ok_or(ClientError::ToolNotFound)?;
+            if !*enabled {
+                return Err(ClientError::ToolNotFound);
+            }
+            if let Ok(res) = tool.run(fnc.arguments.clone()) {
+                self.add(vec![Message {
+                    role: "function".to_string(),
+                    content: vec![MessageContext::Text(res)],
+                }])
+                .await;
+            } else if let Err(e) = tool.run(fnc.arguments.clone()) {
+                self.add(vec![Message {
+                    role: "function".to_string(),
+                    content: vec![MessageContext::Text(format!("Error: {}", e))],
+                }])
+                .await;
+            }
+        } else {
+            return Err(ClientError::UnknownError);
+        }
+
+        Ok(self)
+    }
 }
