@@ -43,6 +43,7 @@ pub enum Role {
     User,
     Bot,
     System,
+    Assistant,
 }
 
 pub struct Settings {
