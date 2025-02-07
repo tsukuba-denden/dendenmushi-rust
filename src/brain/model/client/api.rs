@@ -1,8 +1,9 @@
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
 use super::{prompt::{Choice, Message}, function::FunctionDef};
 
 /// API headers構造体  
+#[derive(Debug)]
 pub struct APIResponseHeaders {
     /// Retry-After  
     pub retry_after: Option<u64>,
@@ -17,7 +18,7 @@ pub struct APIResponseHeaders {
 }
 
 /// APIリクエスト構造体  
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct APIRequest {
     /// モデル名の指定  
     /// ex. "GPT-4o"  
@@ -39,6 +40,35 @@ pub struct APIRequest {
     pub max_tokens: u64,
     pub top_p: f64,
 }
+
+// カスタムSerialize実装
+impl Serialize for APIRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("APIRequest", 6)?;
+
+        state.serialize_field("model", &self.model)?;
+        state.serialize_field("messages", &self.messages)?;
+        state.serialize_field("temperature", &self.temperature)?;
+        state.serialize_field("max_tokens", &self.max_tokens)?;
+        state.serialize_field("top_p", &self.top_p)?;
+
+        // functions が空でない場合のみシリアライズ
+        if !self.functions.is_empty() {
+            state.serialize_field("functions", &self.functions)?;
+        }
+
+        // function_call が "none" でない場合のみシリアライズ
+        if self.function_call != serde_json::Value::String("none".to_string()) {
+            state.serialize_field("function_call", &self.function_call)?;
+        }
+
+        state.end()
+    }
+}
+
 
 /// レスポンス構造体
 #[derive(Debug, Deserialize)]

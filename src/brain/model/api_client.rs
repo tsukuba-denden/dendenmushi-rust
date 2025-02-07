@@ -1,117 +1,78 @@
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::error::Error;
+use std::sync::Arc;
+
+use call_agent::{client::{ModelConfig, OpenAIClient}, function::Tool, prompt::{Message, MessageContext, MessageImage}};
+use observer::brain::tools::{get_time::GetTime, memory::MemoryTool, web_scraper::WebScraper, www_search::WebSearch};
+use serde_json::Value;
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-impl OpenAIClient {
-    pub fn new(api_key: &str) -> Self {
-        Self {
-            client: Client::new(),
-            api_key: api_key.to_string(),
-        }
-    }
-
-    pub async fn call_function(
-        &self,
-        model: &str,
-        prompt: &str,
-        function_definitions: Vec<FunctionDef>,
-    ) -> Result<Option<FunctionCall>, Box<dyn Error>> {
-        let url = "https://api.openai.com/v1/chat/completions";
-
-        let request = APIRequest {
-            model: model.to_string(),
-            messages: vec![Message {
-                role: "user".to_string(),
-                content: prompt.to_string(),
-            }],
-            functions: function_definitions,
-            function_call: "auto".to_string(), // 自動的に適切な関数を選ぶ
-        };
-
-        let res = self
-            .client
-            .post(url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request)
-            .send()
-            .await?;
-
-        let response_body: APIResponse = res.json().await?;
-
-        if let Some(function_call) = &response_body.choices[0].message.function_call {
-            Ok(Some(function_call.clone()))
-        } else {
-            Ok(None)
-        }
-    }
+pub struct AIClient {
+    client: OpenAIClient,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let api_key = "YOUR_OPENAI_API_KEY"; // ここにAPIキーを入れる
-    let openai = OpenAIClient::new(api_key);
-
-    // 関数定義: `get_weather` をモデルに伝える
-    let function_definitions = vec![FunctionDefinition {
-        name: "get_weather".to_string(),
-        description: "Get the weather information for a given city.",
-        parameters: json!({
-            "type": "object",
-            "properties": {
-                "city": { "type": "string", "description": "The name of the city" },
-                "unit": { "type": "string", "enum": ["C", "F"], "description": "Temperature unit (Celsius or Fahrenheit)" }
-            },
-            "required": ["city"]
-        }),
-    }];
-
-    // Function Callingを試す
-    if let Some(function_call) = openai
-        .call_function("gpt-4-turbo", "東京の天気を教えて", function_definitions)
-        .await?
-    {
-        println!("関数名: {}", function_call.name);
-        println!("引数: {}", function_call.arguments);
-    } else {
-        println!("関数呼び出しなし");
+impl AIClient {
+    pub fn new(url: &str, api_key: Option<&str>) -> Self {
+        let client = OpenAIClient::new(url, api_key);
+        AIClient { client }
     }
 
-    Ok(())
+    pub async fn 
+}
+
+
+
+#[tokio::main]
+async fn main() {
+  
+    c.def_tool(Arc::new(GetTime::new()));
+    //c.def_tool(Arc::new(WebSearch::new()));
+    c.def_tool(Arc::new(WebScraper::new()));
+    c.def_tool(Arc::new(MemoryTool::new()));
+
+    let conf = ModelConfig{
+        model: "gpt-4o-mini".to_string(),
+        temp: Some(0.5),
+        max_token: Some(4000),
+        top_p: Some(1.0),
+    };
+
+    
+    let mut prompt_stream = c.create_prompt();
+    loop {
+        let mut input = String::new();
+        std::io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line");
+        let prompt = vec![Message::User {
+            content: vec![MessageContext::Text(input.trim().to_string())],
+        }];
+        prompt_stream.add(prompt).await;
+
+        loop {
+            // Ask for a continuation or function response
+            let _ = prompt_stream.generate_use_tool(&conf).await;
+            let res = prompt_stream.last().await.unwrap();
+
+            match res {
+                // If the response comes from a tool, continue generating.
+                Message::Function { .. } => continue,
+                // When we have a plain response, try to extract its text and print it.
+                Message::Assistant { ref content, .. } => {
+                    if let Some(MessageContext::Text(text)) = content.first() {
+                        // Replace escape sequences with actual newlines
+                        let formatted_text = text.replace("\\n", "\n");
+                        println!("{}", formatted_text);
+                    } else {
+                        println!("{:?}", res);
+                    }
+                    break;
+                }
+                // Fallback for any other message type.
+                _ => {
+                    println!("{:?}", res);
+                    break;
+                }
+            }
+        }
+    }
+
 }

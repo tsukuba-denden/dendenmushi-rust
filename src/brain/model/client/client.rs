@@ -1,7 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use reqwest::Client;
-use serde_json::json;
 
 use super::{api::{APIRequest, APIResponse, APIResponseHeaders}, err::ClientError, function::{FunctionDef, Tool}, prompt::{Message, MessageContext}};
 
@@ -10,7 +9,7 @@ pub struct OpenAIClient {
     pub client: Client,
     pub end_point: String,
     pub api_key: Option<String>,
-    pub tools: HashMap<String, (Box<dyn Tool>, bool/* enable */)>,
+    pub tools: HashMap<String, (Arc<dyn Tool + Send + Sync>, bool)>,
 }
 
 pub struct OpenAIClientState<'a> {
@@ -25,6 +24,7 @@ pub struct ModelConfig {
     pub top_p: Option<f64>,
 }
 
+#[derive(Debug)]
 pub struct APIResult {
     pub response: APIResponse,
     pub headers: APIResponseHeaders,
@@ -44,11 +44,11 @@ impl OpenAIClient {
     }
 
     /// ツールを登録  
-    /// tool: ツール
-    /// T: Toolを実装した型
+    /// tool: ツールへの参照  
+    /// T: Toolを実装した型  
     /// ツール名が重複している場合は上書きされる
-    pub fn def_tool<T: Tool + 'static>(&mut self, tool: T) {
-        self.tools.insert(tool.def_name().to_string(), (Box::new(tool), true));
+    pub fn def_tool<T: Tool + Send + Sync + 'static>(&mut self, tool: Arc<T>) {
+        self.tools.insert(tool.def_name().to_string(), (tool, true));
     }
 
     /// ツールの一覧を取得  
@@ -139,8 +139,8 @@ impl OpenAIClient {
         top_p: Option<f64>) 
         -> Result<APIResult, ClientError> 
         {
-        let url = format!("{}/v1/chat/completions", self.end_point);
-        if !url.starts_with("https://") {
+        let url = format!("{}/chat/completions", self.end_point);
+        if !url.starts_with("https://") && !url.starts_with("http://") {
             return Err(ClientError::InvalidEndpoint);
         }
 
@@ -157,6 +157,7 @@ impl OpenAIClient {
         let res = self.client
             .post(&url)
             .header("Content-Type", "application/json")
+            .header("authorization", format!("Bearer {}", self.api_key.as_deref().unwrap_or("")))
             .json(&request)
             .send()
             .await.map_err(|_| ClientError::NetworkError)?;
@@ -168,8 +169,9 @@ impl OpenAIClient {
             limit: res.headers().get("X-RateLimit-Limit").and_then(|v| v.to_str().ok().and_then(|v| v.parse().ok())),
             extra_other: res.headers().iter().map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string())).collect(),
         };
+        let text = res.text().await.map_err(|_| ClientError::InvalidResponse)?;
 
-        let response_body: APIResponse = res.json().await.map_err(|_| ClientError::InvalidResponse)?;
+        let response_body: APIResponse = serde_json::from_str(&text).map_err(|_| ClientError::InvalidResponse)?;
 
         Ok(APIResult {
             response: response_body,
@@ -209,36 +211,33 @@ impl<'a> OpenAIClientState<'a> {
 
 
     /// AIが応答を生成
-    pub async fn generate(&mut self, model: &ModelConfig) -> Result<&mut Self, ClientError> {
+    pub async fn generate(&mut self, model: &ModelConfig) -> Result<APIResult, ClientError> {
         let result = self.client.send(model, &self.prompt).await?;
         let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
         let choice = choices.get(0).ok_or(ClientError::InvalidResponse)?;
 
         if choice.message.content.is_some() {
             let content = choice.message.content.as_ref().unwrap().clone();
-            self.add(vec![Message {
-                role: "assistant".to_string(),
-                content: vec![MessageContext::Text(content)],
-            }])
-            .await;
+            self.add(vec![Message::Assistant {
+                content: vec![MessageContext::Text(content)]
+            }]).await;
         } else {
             return Err(ClientError::UnknownError);
         }
 
-        Ok(self)
+        Ok(result)
     }
 
     /// AIが応答を生成  
     /// toolを使用することもある  
-    pub async fn generate_use_tool(&mut self, model: &ModelConfig) -> Result<&mut Self, ClientError> {
+    pub async fn generate_use_tool(&mut self, model: &ModelConfig) -> Result<APIResult, ClientError> {
         let result = self.client.send_use_tool(model, &self.prompt).await?;
         let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
         let choice = choices.get(0).ok_or(ClientError::InvalidResponse)?;
 
         if choice.message.content.is_some() {
             let content = choice.message.content.as_ref().unwrap().clone();
-            self.add(vec![Message {
-            role: "assistant".to_string(),
+            self.add(vec![Message::Assistant {
             content: vec![MessageContext::Text(content)],
             }])
             .await;
@@ -249,14 +248,14 @@ impl<'a> OpenAIClientState<'a> {
                 return Err(ClientError::ToolNotFound);
             }
             if let Ok(res) = tool.run(fnc.arguments.clone()) {
-                self.add(vec![Message {
-                    role: "function".to_string(),
+                self.add(vec![Message::Function {
+                    name: fnc.name.clone(),
                     content: vec![MessageContext::Text(res)],
                 }])
                 .await;
             } else if let Err(e) = tool.run(fnc.arguments.clone()) {
-                self.add(vec![Message {
-                    role: "function".to_string(),
+                self.add(vec![Message::Function {
+                    name: fnc.name.clone(),
                     content: vec![MessageContext::Text(format!("Error: {}", e))],
                 }])
                 .await;
@@ -265,20 +264,19 @@ impl<'a> OpenAIClientState<'a> {
             return Err(ClientError::UnknownError);
         }
 
-        Ok(self)
+        Ok(result)
     }
 
     /// AIが応答を生成
     /// tool使用を強制
-    pub async fn generate_with_tool(&mut self, model: &ModelConfig, tool_name: &str) -> Result<&mut Self, ClientError> {
+    pub async fn generate_with_tool(&mut self, model: &ModelConfig, tool_name: &str) -> Result<APIResult, ClientError> {
         let result = self.client.send_with_tool(model, &self.prompt, tool_name).await?;
         let choices = result.response.choices.as_ref().ok_or(ClientError::InvalidResponse)?;
         let choice = choices.get(0).ok_or(ClientError::InvalidResponse)?;
 
         if choice.message.content.is_some() {
             let content = choice.message.content.as_ref().unwrap().clone();
-            self.add(vec![Message {
-                role: "assistant".to_string(),
+            self.add(vec![Message::Assistant {
                 content: vec![MessageContext::Text(content)],
             }])
             .await;
@@ -289,14 +287,14 @@ impl<'a> OpenAIClientState<'a> {
                 return Err(ClientError::ToolNotFound);
             }
             if let Ok(res) = tool.run(fnc.arguments.clone()) {
-                self.add(vec![Message {
-                    role: "function".to_string(),
+                self.add(vec![Message::Function {
+                    name: fnc.name.clone(),
                     content: vec![MessageContext::Text(res)],
                 }])
                 .await;
             } else if let Err(e) = tool.run(fnc.arguments.clone()) {
-                self.add(vec![Message {
-                    role: "function".to_string(),
+                self.add(vec![Message::Function {
+                    name: fnc.name.clone(),
                     content: vec![MessageContext::Text(format!("Error: {}", e))],
                 }])
                 .await;
@@ -305,6 +303,6 @@ impl<'a> OpenAIClientState<'a> {
             return Err(ClientError::UnknownError);
         }
 
-        Ok(self)
+        Ok(result)
     }
 }
