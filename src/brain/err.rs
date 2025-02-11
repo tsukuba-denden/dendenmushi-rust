@@ -12,6 +12,9 @@ pub enum ObsError {
     IoError(std::io::Error),
     // 他のエラー型も必要に応じて追加可能
     IndexOutOfBounds,
+    NotFoundPlace,
+    NotFoundChannel,
+    DisabledChannel,
     UnknownError,
 }
 
@@ -22,6 +25,9 @@ impl fmt::Display for ObsError {
             ObsError::InvalidInput(ref msg) => write!(f, "InvalidInput: {}", msg),
             ObsError::IoError(ref err) => write!(f, "IoError: {}", err),
             ObsError::IndexOutOfBounds => write!(f, "Index out of bounds"),
+            ObsError::NotFoundPlace => write!(f, "Place not found"),
+            ObsError::NotFoundChannel => write!(f, "Channel not found"),
+            ObsError::DisabledChannel => write!(f, "Channel is disabled"),
             ObsError::UnknownError => write!(f, "Unknown error"),
         }
     }

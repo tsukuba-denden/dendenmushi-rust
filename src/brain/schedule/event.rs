@@ -1,7 +1,7 @@
 use regex::Regex;
 use cron::Schedule;
 
-use crate::brain::{err::ObsError, state::Event};
+use crate::brain::err::ObsError;
 
 pub struct CEvent {
     pub user_join: Option<String /* prompt */>,
@@ -186,43 +186,3 @@ impl CEvent {
     }
 }
 
-/// Method Impl
-impl CEvent {
-    pub fn check_msg_event(&self, message: Event) -> Option<&String> {
-        match message {
-            Event::UserJoin => self.get_user_join(),
-            Event::UserLeave => self.get_user_leave(),
-            Event::UserTx => self.get_user_tx(),
-            Event::RxImage => self.get_rx_image(),
-            Event::RxVideo => self.get_rx_video(),
-            Event::RxAudio => self.get_rx_audio(),
-            Event::RxFile => self.get_rx_file(),
-            Event::RxMessage(msg) => {
-                if let Some(prompt) = self.match_rx_url(&msg) {
-                    return Some(prompt);
-                } else {
-                    return self.match_rx_message(&msg);
-                }
-            },
-        }
-    }
-
-    pub fn match_rx_url(&self, message: &str) -> Option<&String> {
-        if let Some(prompt) = self.rx_url.as_ref() {
-            let rex = Regex::new(r".*?(https?://[\w/:%#\$&\?\(\)~\.=\+\-]+).*?").unwrap();
-            if rex.is_match(message) {
-                return Some(prompt);
-            }
-        }
-        None
-    }
-
-    pub fn match_rx_message(&self, message: &str) -> Option<&String> {
-        for (pattern, prompt) in &self.re_message {
-            if pattern.is_match(message) {
-                return Some(prompt);
-            }
-        }
-        None
-    }
-}
