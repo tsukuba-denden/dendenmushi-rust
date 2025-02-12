@@ -344,7 +344,7 @@ impl Tool for WebScraper {
     fn def_description(&self) -> &str {
         "Extracts webpage content using a CSS selector (avoid '*', use specific tags like 'p, h1, h2, h3, a').  
         Supports 'reqwest' (fast) and 'playwright' (beta, may be unstable) for JavaScript-heavy pages.  
-        Use 'seek_pos' and 'max_length' to paginate (e.g., 0-1000, 1000-2000) for full extraction.  
+        Use 'seek_pos' and 'max_length' to paginate (e.g., 0-2000, 2000-4000) for full extraction.  
         **If no content is retrieved, consider:**
         - The site may require JavaScript rendering ('playwright' mode).
         - The selector may be incorrect.
