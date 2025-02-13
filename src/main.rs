@@ -1,166 +1,19 @@
 use std::sync::Arc;
+use agent::{ChannelState, InputMessage};
 use dashmap::DashMap;
-use tokio::sync::Mutex;
+mod agent;
 
 use call_agent::chat::{
-    client::{ModelConfig, OpenAIClient, OpenAIClientState},
+    client::{ModelConfig, OpenAIClient},
     prompt::{Message, MessageContext},
 };
-use observer::{prefix, tools::{self, web_scraper}};
+use observer::{prefix, tools::{self}};
 use tools::{get_time::GetTime, memory::MemoryTool, web_scraper::WebScraper};
 
-use serenity::{all::{CreateCommand, CreateCommandOption, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse}, async_trait};
+use serenity::{all::{CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse}, async_trait};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-
-pub struct InputMessage {
-    pub content: String,
-    pub name: String,
-    pub message_id: String,
-    pub reply_to: Option<String>,
-}
-// 各チャンネルの会話履歴（state）を保持する構造体
-pub struct ChannelState {
-    // 並列処理のため、prompt_stream を Mutex で保護する
-    prompt_stream: Mutex<OpenAIClientState<'static>>,
-}
-
-impl ChannelState {
-    fn new(client: &Arc<OpenAIClient>) -> Self {
-        // 新しい PromptStream を生成する
-        let prompt_stream = client.create_prompt();
-        // Extend lifetime to 'static; safe because client lives for the entire duration of the program
-        let prompt_stream: OpenAIClientState<'static> = unsafe { std::mem::transmute(prompt_stream) };
-        Self {
-            prompt_stream: Mutex::new(prompt_stream),
-        }
-    }
-
-    pub async fn ask(&self, message: InputMessage) -> String {
-        let mut prompt_stream = {
-            let prompt_stream = self.prompt_stream.lock().await;
-            (*prompt_stream).clone()
-        };
-
-        let content = format!("id:{};\n{}", message.message_id, message.content);
-
-        let prompt = vec![Message::User {
-            content: vec![MessageContext::Text(content)],
-            name: Some(message.name),
-        }];
-        prompt_stream.add(prompt).await;
-
-        for _ in 0..5 {
-            let _ = prompt_stream.generate_can_use_tool(None).await;
-            let res = match prompt_stream.last().await {
-                Some(r) => r,
-                None => return "AIからの応答がありませんでした".to_string(),
-            };
-
-            println!("{:?}", res);
-
-            match res {
-                Message::Tool { .. } => continue,
-                Message::Assistant { ref content, .. } => {
-                    if let Some(MessageContext::Text(text)) = content.first() {
-                        return text.replace("\\n", "\n");
-                    } else {
-                        return format!("{:?}", res);
-                    }
-                }
-                _ => return "AIからの応答がありませんでした".to_string(),
-            }
-        }
-        let _ = prompt_stream.generate(None).await;
-        let res = prompt_stream.last().await.unwrap();
-        println!("{:?}", res);
-        match res {
-            Message::Assistant { ref content, .. } => {
-                if let Some(MessageContext::Text(text)) = content.first() {
-                    return text.replace("\\n", "\n");
-                } else {
-                    return format!("{:?}", res);
-                }
-            }
-            _ => return "AIからの応答がありませんでした".to_string(),
-        }
-    }
-
-    pub async fn deep_search(&self, message: InputMessage, try_count: usize) -> String {
-        let mut prompt_stream = {
-            let prompt_stream = self.prompt_stream.lock().await;
-            (*prompt_stream).clone()
-        };
-
-        let content = format!("id:{};\n{}", message.message_id, message.content);
-
-        let prompt = vec![Message::User {
-            content: vec![MessageContext::Text(content)],
-            name: Some(message.name),
-        }];
-
-        let systemprompt = vec![Message::Developer {
-            content: "p, h1, h2, h3, h4, h5, a, video, imgタグを指定してリンクをたどったりして内容を完全に把握するように まずは初めのページあるリンクなどをたどっていくように そのページの要素をすべて確認したら そのページのリンクのページを続けてみていくように なにも見つからなかったらスクレイピング方法を変えるか、ほかのページを見に行ってください".to_string(),
-            name: Some("Observer".to_string()),
-        }];
-        prompt_stream.add(prompt).await;
-        prompt_stream.add(systemprompt).await;
-
-        for _ in 0..try_count {
-            let _ = prompt_stream.generate_with_tool(None, "web_scraper").await;
-            let res = match prompt_stream.last().await {
-                Some(r) => r,
-                None => return "AIからの応答がありませんでした".to_string(),
-            };
-
-            println!("{:?}", res);
-
-            match res {
-                Message::Tool { .. } => continue,
-                Message::Assistant { ref content, .. } => {
-                    if let Some(MessageContext::Text(text)) = content.first() {
-                        return text.replace("\\n", "\n");
-                    } else {
-                        return format!("{:?}", res);
-                    }
-                }
-                _ => return "AIからの応答がありませんでした".to_string(),
-            }
-        }
-        prompt_stream.add(
-            vec![Message::Developer {
-                content: "検索でみつけた内容をまとめてください".to_string(),
-                name: Some("Observer".to_string()),
-            }]
-        ).await;
-        let _ = prompt_stream.generate(None).await;
-        let res = prompt_stream.last().await.unwrap();
-        println!("{:?}", res);
-        match res {
-            Message::Assistant { ref content, .. } => {
-                if let Some(MessageContext::Text(text)) = content.first() {
-                    return text.replace("\\n", "\n");
-                } else {
-                    return format!("{:?}", res);
-                }
-            }
-            _ => return "AIからの応答がありませんでした".to_string(),
-        }
-    }
-
-    pub async fn add_message(&self, message: InputMessage) {
-        let mut prompt_stream = self.prompt_stream.lock().await;
-
-        let content = format!("id:{};\n{}", message.message_id, message.content);
-
-        let prompt = vec![Message::User {
-            content: vec![MessageContext::Text(content)],
-            name: Some(message.name),
-        }];
-        prompt_stream.add(prompt).await;
-    }
-}
 
 struct Handler {
     // Handlerに1つのOpenAIClientを保持
@@ -172,23 +25,35 @@ struct Handler {
 #[async_trait]
 impl EventHandler for Handler {
     /// メッセージが送信されたときの処理
-    async fn message(&self, _ctx: Context, msg: serenity::all::Message) {
-        let state = self
-            .channels
-            .entry(msg.channel_id)
-            .or_insert_with(|| {
-                Arc::new(ChannelState::new(&self.base_client))
-            })
-            .clone();
+    async fn message(&self, ctx: Context, msg: serenity::all::Message) {
+        let state = if let Some(existing) = self.channels.get(&msg.channel_id) {
+            Arc::clone(&existing)
+        } else {
+            let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+            self.channels.insert(msg.channel_id, new_state.clone());
+            new_state
+        };
 
         let message = InputMessage {
             content: msg.content,
             name: msg.author.name.clone(),
             message_id: msg.id.to_string(),
-            reply_to: None,
+            reply_to: msg.referenced_message.as_ref().map(|m| m.id.to_string()),
         };
 
-        state.add_message(message).await;
+        // このメッセージがBotにメンションされているかどうかを確認
+        let bot_id = ctx.cache.current_user().id;
+        let is_mentioned = msg.mentions.iter().any(|user| user.id == bot_id);
+
+        if is_mentioned {
+            let answer_text = state.ask(message).await;
+
+            if let Err(why) = msg.channel_id.say(&ctx.http, &answer_text).await {
+                println!("Err: {:?}", why);
+            }
+        } else {
+            state.add_message(message).await;
+        }
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -216,13 +81,13 @@ impl EventHandler for Handler {
                     }
 
                     let question = command.data.options[0].value.as_str().unwrap();
-                    let state = self
-                        .channels
-                        .entry(command.channel_id)
-                        .or_insert_with(|| {
-                            Arc::new(ChannelState::new(&self.base_client))
-                        })
-                        .clone();
+                    let state = if let Some(existing) = self.channels.get(&command.channel_id) {
+                        Arc::clone(&existing)
+                    } else {
+                        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+                        self.channels.insert(command.channel_id, new_state.clone());
+                        new_state
+                    };
 
                     let message = InputMessage {
                         content: question.to_string(),
@@ -252,13 +117,13 @@ impl EventHandler for Handler {
                     }
                     let question = command.data.options[0].value.as_str().unwrap();
                     let try_count = command.data.options[1].value.as_i64().unwrap_or(10) as usize;
-                    let state = self
-                        .channels
-                        .entry(command.channel_id)
-                        .or_insert_with(|| {
-                            Arc::new(ChannelState::new(&self.base_client))
-                        })
-                        .clone();
+                    let state = if let Some(existing) = self.channels.get(&command.channel_id) {
+                        existing.clone()
+                    } else {
+                        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+                        self.channels.insert(command.channel_id, new_state.clone());
+                        new_state
+                    };
 
                     let message = InputMessage {
                         content: question.to_string(),
