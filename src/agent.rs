@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{result, sync::Arc};
 
 use call_agent::chat::{client::{OpenAIClient, OpenAIClientState}, prompt::{Message, MessageContext}};
 use tokio::sync::Mutex;
@@ -44,105 +44,88 @@ impl ChannelState {
         prompt_stream.add(prompt).await;
 
         for _ in 0..5 {
-            let _ = prompt_stream.generate_can_use_tool(None).await;
-            let res = match prompt_stream.last().await {
-                Some(r) => r,
-                None => return "AIからの応答がありませんでした".to_string(),
-            };
-
-            println!("{:?}", res);
-
-            match res {
-                Message::Tool { .. } => continue,
-                Message::Assistant { ref content, .. } => {
-                    if let Some(MessageContext::Text(text)) = content.first() {
-                        return text.replace("\\n", "\n");
-                    } else {
-                        return format!("{:?}", res);
-                    }
+            let res = match prompt_stream.generate_can_use_tool(None).await {
+                Ok(res) => res,
+                Err(_) => {
+                    return "AIからの応答がありませんでした".to_string();
                 }
-                _ => return "AIからの応答がありませんでした".to_string(),
+            };
+            if res.has_tool_calls {
+                continue;
+            } else if res.has_content {
+                return res.content.unwrap().replace("\\n", "\n");
+            } else {
+                return "AIからの応答がありませんでした".to_string();
             }
         }
-        let _ = prompt_stream.generate(None).await;
-        let res = prompt_stream.last().await.unwrap();
-        println!("{:?}", res);
-        match res {
-            Message::Assistant { ref content, .. } => {
-                if let Some(MessageContext::Text(text)) = content.first() {
-                    return text.replace("\\n", "\n");
-                } else {
-                    return format!("{:?}", res);
-                }
+        let res = match prompt_stream.generate(None).await {
+            Ok(res) => res,
+            Err(_) => {
+                return "AIからの応答がありませんでした".to_string();
             }
-            _ => return "AIからの応答がありませんでした".to_string(),
+        };
+        if res.has_content {
+            return res.content.unwrap().replace("\\n", "\n");
+        } else {
+            return "AIからの応答がありませんでした".to_string();
         }
     }
 
     pub async fn deep_search(&self, message: InputMessage, try_count: usize) -> String {
         let mut prompt_stream = {
-            let prompt_stream = self.prompt_stream.lock().await;
-            (*prompt_stream).clone()
+            let ps = self.prompt_stream.lock().await;
+            ps.clone()
         };
 
-        let meta = format!("id:{}, replay_to_id:{}", message.message_id, message.reply_to.unwrap_or("none".to_string()));
-        let prompt = vec![Message::User {
+        let meta = format!(
+            "id:{}, replay_to_id:{}",
+            message.message_id,
+            message.reply_to.unwrap_or_else(|| "none".to_string())
+        );
+        let user_prompt = vec![Message::User {
             content: vec![
                 MessageContext::Text(meta),
-                MessageContext::Text(message.content)
-                ],
+                MessageContext::Text(message.content),
+            ],
             name: Some(message.name),
         }];
-
-        let systemprompt = vec![Message::Developer {
+        let system_prompt = vec![Message::Developer {
             content: "p, h1, h2, h3, h4, h5, a, video, img タグを対象に処理します。\n\
-                    1. 必要に応じて検索エンジンで目的の情報がありそうなページを探します\n\
-                    2. ページをスクレイピングして情報を取得します。必要に応じてページにあるリンクのページもスクレイピングして情報を集めます\n\
-                    3. もしリンクがなく、解析対象のページがなくなった場合は、スクレイピング方法を変更するか、別のページを検討してください。".to_string(),
+                      1. 必要に応じて'https://www.bing.com/search?q={}+{}...'で目的の情報がありそうなページを探します\n\
+                      2. ページをスクレイピングして情報を取得します。必要に応じてページにあるリンクのページもスクレイピングして情報を集めます\n\
+                      3. もしリンクがなく、解析対象のページがなくなった場合は、スクレイピング方法を変更するか、別のページを検討してください。"
+                .to_string(),
             name: Some("Observer".to_string()),
         }];
-        prompt_stream.add(prompt).await;
-        prompt_stream.add(systemprompt).await;
+
+        prompt_stream.add(user_prompt).await;
+        prompt_stream.add(system_prompt).await;
 
         for _ in 0..try_count {
-            let _ = prompt_stream.generate_with_tool(None, "web_scraper").await;
-            let res = match prompt_stream.last().await {
-                Some(r) => r,
-                None => return "AIからの応答がありませんでした".to_string(),
-            };
-
-            println!("{:?}", res);
-
-            match res {
-                Message::Tool { .. } => continue,
-                Message::Assistant { ref content, .. } => {
-                    if let Some(MessageContext::Text(text)) = content.first() {
-                        return text.replace("\\n", "\n");
-                    } else {
-                        return format!("{:?}", res);
-                    }
+            let res = match  prompt_stream.generate_with_tool(None, "web_scraper").await {
+                Ok(res) => res,
+                Err(_) => {
+                    return "AIからの応答がありませんでした".to_string();
                 }
-                _ => return "AIからの応答がありませんでした".to_string(),
-            }
+            };
         }
-        prompt_stream.add(
-            vec![Message::Developer {
+
+        prompt_stream
+            .add(vec![Message::Developer {
                 content: "内容をまとめてください".to_string(),
                 name: Some("Observer".to_string()),
-            }]
-        ).await;
-        let _ = prompt_stream.generate(None).await;
-        let res = prompt_stream.last().await.unwrap();
-        println!("{:?}", res);
-        match res {
-            Message::Assistant { ref content, .. } => {
-                if let Some(MessageContext::Text(text)) = content.first() {
-                    return text.replace("\\n", "\n");
-                } else {
-                    return format!("{:?}", res);
-                }
+            }])
+            .await;
+        let res = match prompt_stream.generate(None).await {
+            Ok(res) => res,
+            Err(_) => {
+                return "AIからの応答がありませんでした".to_string();
             }
-            _ => return "AIからの応答がありませんでした".to_string(),
+        };
+        if res.has_content {
+            return res.content.unwrap().replace("\\n", "\n");
+        } else {
+            return "AIからの応答がありませんでした".to_string();
         }
     }
 

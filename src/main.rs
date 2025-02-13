@@ -45,7 +45,13 @@ impl EventHandler for Handler {
         let bot_id = ctx.cache.current_user().id;
         let is_mentioned = msg.mentions.iter().any(|user| user.id == bot_id);
 
+        // Botにメンションされている場合はAIに質問し、そうでない場合は会話履歴に追加
         if is_mentioned {
+            // タイピング表示
+            if let Err(e) = msg.channel_id.broadcast_typing(&ctx.http).await {
+                println!("Error setting typing indicator: {:?}", e);
+            }
+
             let answer_text = state.ask(message).await;
 
             if let Err(why) = msg.channel_id.say(&ctx.http, &answer_text).await {
