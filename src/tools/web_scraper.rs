@@ -18,15 +18,14 @@ CSSセレクターに基づいて、該当する要素のテキストやリン�
 }
 */
 
-use call_agent::chat::{err, function::Tool};
+use call_agent::chat::function::Tool;
 use regex::Regex;
 use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{error::Error, sync::Arc};
 use playwright::Playwright;
-use tokio::{self, sync::Mutex};
+use tokio::{self};
 use std::fmt;
 
 const MAX_FILE_SIZE: u64 = 5 * 1024 * 1024; // 5MB
@@ -275,7 +274,19 @@ impl WebScraper {
         selector_str: &str,
     ) -> Result<ScrapedData, ScraperError> {
         let playwright = Playwright::initialize().await.map_err(|_| ScraperError::InitializationError)?;
-        let browser = playwright.chromium().launcher().headless(true).launch().await.map_err(|_| ScraperError::LaunchError)?;
+        let browser = playwright.chromium().launcher().headless(true).args(&vec![
+            // 一応,,
+            String::from("--enable-features=BlockInsecurePrivateNetworkRequests"),
+            String::from("--disable-file-system"),
+            String::from("--disable-popup-blocking"),
+            String::from("--disable-web-security"),
+            String::from("--disable-webgl"),
+            String::from("--disable-webrtc"),
+            String::from("--disable-camera"),
+            String::from("--disable-microphone"),
+            String::from("--disable-media-source"),
+            String::from("--host-resolver-rules=MAP localhost 127.255.255.255"),
+        ]).launch().await.map_err(|_| ScraperError::LaunchError)?;
         let context = browser.context_builder()
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko, OBSERVER SCRAPER) Chrome/120.0.0.0 Safari/537.36")
             .build()
@@ -332,6 +343,27 @@ impl WebScraper {
     
         format!("{}...<{} characters remaining>", sliced_text, remaining_chars)
     }
+
+    pub fn is_safe_url(url: &str) -> bool {
+        // ローカルホスト・プライベートIP・ファイルスキームをブロック
+        let dangerous_patterns = vec![
+            r"^http://localhost(:\d+)?", // localhost
+            r"^http://127\.\d+\.\d+\.\d+(:\d+)?", // 127.x.x.x
+            r"^http://192\.168\.\d+\.\d+(:\d+)?", // 192.168.x.x
+            r"^http://10\.\d+\.\d+\.\d+(:\d+)?", // 10.x.x.x
+            r"^http://172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+(:\d+)?", // 172.16.x.x - 172.31.x.x
+            r"^file://", // file:// スキーム
+        ];
+    
+        // 正規表現でURLをチェック
+        for pattern in &dangerous_patterns {
+            let re = Regex::new(pattern).unwrap();
+            if re.is_match(url) {
+                return false; // 危険なURL
+            }
+        }
+        true // 安全なURL
+    }
     
 }
 
@@ -342,14 +374,14 @@ impl Tool for WebScraper {
     }
 
     fn def_description(&self) -> &str {
-        "Extracts webpage content using a CSS selector (avoid '*', use specific tags like 'p, h1, h2, h3, a').  
-        Supports 'reqwest' (fast) and 'playwright' (beta, may be unstable) for JavaScript-heavy pages.  
-        Use 'seek_pos' and 'max_length' to paginate (e.g., 0-2000, 2000-4000) for full extraction.  
-        **If no content is retrieved, consider:**
-        - The site may require JavaScript rendering ('playwright' mode).
-        - The selector may be incorrect.
-        - The site may block scraping.  
-        **Always include the scraped URL at the end of your response.**"
+"Extracts webpage content using a CSS selector (avoid '*', use specific tags like 'p, h1, h2, h3, a').  
+Supports 'reqwest' (fast) and 'playwright' (beta, may be unstable) for JavaScript-heavy pages.  
+Use 'seek_pos' and 'max_length' to paginate (e.g., 0-3999, 4000-7999) for full extraction.  
+**If no content is retrieved, consider:**
+- The site may require JavaScript rendering ('playwright' mode).
+- The selector may be incorrect.
+- The site may block scraping.  
+IMPORTANT: **Always include the scraped URL at the end of your response.**"
     }
 
     fn def_parameters(&self) -> serde_json::Value {
@@ -358,7 +390,7 @@ impl Tool for WebScraper {
             "properties": {
                 "url": {
                     "type": "string",
-                    "description": "Target webpage URL (e.g., 'https://example.com')."
+                    "description": "Target webpage URL (e.g., 'https://www.bing.com/search?q={key}+{key}...')."
                 },
                 "selector": {
                     "type": "string",
@@ -367,15 +399,15 @@ impl Tool for WebScraper {
                 "mode": {
                     "type": "string",
                     "enum": ["reqwest", "playwright"],
-                    "description": "Scraping method: 'reqwest' (fast) or 'playwright' (e.g., 'reqwest')."
+                    "description": "Scraping method: 'reqwest' (fast) or 'playwright' (e.g., 'reqwest', if use bing = 'playwright')."
                 },
                 "seek_pos": {
                     "type": "integer",
-                    "description": "Character position to start extracting content (e.g., 0)."
+                    "description": "Character position to start extracting content (e.g., 0, 4000, etc)."
                 },
                 "max_length": {
                     "type": "integer",
-                    "description": "Maximum length of extracted content (e.g., 1000)."
+                    "description": "Maximum length of extracted content (e.g., 3999, 7999, 200000[ALL])."
                 }
             },
             "required": ["url", "selector", "seek_pos", "max_length"]
@@ -408,6 +440,8 @@ impl Tool for WebScraper {
             .ok_or_else(|| "Missing 'max_length' parameter".to_string())? as usize;
 
         let scraper = self.clone();
+
+        WebScraper::is_safe_url(&url).then(|| ()).ok_or_else(|| "Are you try hacking me?".to_string())?;
 
         let result = std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();

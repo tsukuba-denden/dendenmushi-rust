@@ -7,10 +7,10 @@ use call_agent::chat::{
     client::{ModelConfig, OpenAIClient},
     prompt::{Message, MessageContext},
 };
-use observer::{prefix, tools::{self}};
-use tools::{get_time::GetTime, memory::MemoryTool, web_scraper::WebScraper};
+use observer::{prefix, tools::{self, get_time::GetTime}};
+use tools::{memory::MemoryTool, web_scraper::WebScraper};
 
-use serenity::{all::{CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse}, async_trait};
+use serenity::{all::{CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EditInteractionResponse}, async_trait};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
@@ -39,7 +39,10 @@ impl EventHandler for Handler {
             name: msg.author.name.clone(),
             message_id: msg.id.to_string(),
             reply_to: msg.referenced_message.as_ref().map(|m| m.id.to_string()),
+            user_id: msg.author.id.to_string(),
         };
+
+        println!("Message: {:?}", message.clone());
 
         // このメッセージがBotにメンションされているかどうかを確認
         let bot_id = ctx.cache.current_user().id;
@@ -48,13 +51,27 @@ impl EventHandler for Handler {
         // Botにメンションされている場合はAIに質問し、そうでない場合は会話履歴に追加
         if is_mentioned {
             // タイピング表示
-            if let Err(e) = msg.channel_id.broadcast_typing(&ctx.http).await {
-                println!("Error setting typing indicator: {:?}", e);
-            }
+            let typing_task = tokio::spawn({
+                let ctx = ctx.clone();
+                let channel_id = msg.channel_id;
+                async move {
+                    loop {
+                        if let Err(e) = channel_id.broadcast_typing(&ctx.http).await {
+                            println!("Error setting typing indicator: {:?}", e);
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+                    }
+                }
+            });
 
             let answer_text = state.ask(message).await;
-
-            if let Err(why) = msg.channel_id.say(&ctx.http, &answer_text).await {
+            typing_task.abort();
+            
+            let response = CreateMessage::new()
+            .content(answer_text)
+            .flags(MessageFlags::SUPPRESS_EMBEDS);
+    
+            if let Err(why) = msg.channel_id.send_message(&ctx.http, response).await {
                 println!("Err: {:?}", why);
             }
         } else {
@@ -73,6 +90,18 @@ impl EventHandler for Handler {
 
                     if let Err(why) = command.create_response(&ctx.http, response).await {
                         println!("Failed to respond to ping: {:?}", why);
+                    }
+                }
+
+                "reset" => {
+                    self.channels.remove(&command.channel_id);
+                    let response_data = CreateInteractionResponseMessage::new()
+                    .content("脳りせっと");
+
+                    let response = CreateInteractionResponse::Message(response_data);
+
+                    if let Err(why) = command.create_response(&ctx.http, response).await {
+                        println!("Failed to respond to reset: {:?}", why);
                     }
                 }
 
@@ -100,17 +129,48 @@ impl EventHandler for Handler {
                         name: command.user.name.clone(),
                         message_id: "".to_string(),
                         reply_to: None,
+                        user_id: command.user.id.to_string(),
                     };
 
                     let answer_text = state.ask(message).await;
-                    
-                    let response = EditInteractionResponse::new()
-                        .content(&answer_text);
 
-                    if let Err(why) = command.edit_response(&ctx.http, response).await {
-                        println!("Failed to respond to ask: {:?}", why);
+                    // 改行単位で分割し、2000文字を超えないようにする
+                    let mut chunks = Vec::new();
+                    let mut current_chunk = String::new();
+
+                    for line in answer_text.lines() {
+                        if current_chunk.len() + line.len() + 1 > 2000 {
+                            chunks.push(current_chunk);
+                            current_chunk = String::new();
+                        }
+                        if !current_chunk.is_empty() {
+                            current_chunk.push('\n');
+                        }
+                        current_chunk.push_str(line);
+                    }
+                    if !current_chunk.is_empty() {
+                        chunks.push(current_chunk);
+                    }
+
+                    // 最初のメッセージは `edit_response`
+                    if let Some(first_chunk) = chunks.get(0) {
+                        let response = EditInteractionResponse::new().content(first_chunk);
+                        if let Err(why) = command.edit_response(&ctx.http, response).await {
+                            println!("Failed to edit response: {:?}", why);
+                        }
+                    }
+
+                    // 残りのメッセージは `followup_message`
+                    for chunk in &chunks[1..] {
+                        if let Err(why) = command
+                            .create_followup(&ctx.http, CreateInteractionResponseFollowup::new().content(chunk).flags(MessageFlags::SUPPRESS_EMBEDS))
+                            .await
+                        {
+                            println!("Failed to send follow-up message: {:?}", why);
+                        }
                     }
                 }
+
 
                 "deep_search" => {
                     // 考え中
@@ -121,8 +181,14 @@ impl EventHandler for Handler {
                         println!("Failed to send Defer response: {:?}", why);
                         return;
                     }
+
                     let question = command.data.options[0].value.as_str().unwrap();
-                    let try_count = command.data.options[1].value.as_i64().unwrap_or(10) as usize;
+                    let try_count = if command.data.options.len() > 1 {
+                        command.data.options[1].value.as_i64().unwrap_or(10) as usize
+                    } else {
+                        10
+                    };
+
                     let state = if let Some(existing) = self.channels.get(&command.channel_id) {
                         existing.clone()
                     } else {
@@ -136,15 +202,45 @@ impl EventHandler for Handler {
                         name: command.user.name.clone(),
                         message_id: "".to_string(),
                         reply_to: None,
+                        user_id: command.user.id.to_string(),
                     };
 
                     let answer_text = state.deep_search(message, try_count).await;
 
-                    let response = EditInteractionResponse::new()
-                        .content(&answer_text);
+                    // 改行単位で分割し、2000文字を超えないようにする
+                    let mut chunks = Vec::new();
+                    let mut current_chunk = String::new();
 
-                    if let Err(why) = command.edit_response(&ctx.http, response).await {
-                        println!("Failed to respond to ask: {:?}", why);
+                    for line in answer_text.lines() {
+                        if current_chunk.len() + line.len() + 1 > 2000 {
+                            chunks.push(current_chunk);
+                            current_chunk = String::new();
+                        }
+                        if !current_chunk.is_empty() {
+                            current_chunk.push('\n');
+                        }
+                        current_chunk.push_str(line);
+                    }
+                    if !current_chunk.is_empty() {
+                        chunks.push(current_chunk);
+                    }
+
+                    // 最初のメッセージは `edit_response`
+                    if let Some(first_chunk) = chunks.get(0) {
+                        let response = EditInteractionResponse::new().content(first_chunk);
+                        if let Err(why) = command.edit_response(&ctx.http, response).await {
+                            println!("Failed to edit response: {:?}", why);
+                        }
+                    }
+
+                    // 残りのメッセージは `followup_message`
+                    for chunk in &chunks[1..] {
+                        if let Err(why) = command
+                            .create_followup(&ctx.http, CreateInteractionResponseFollowup::new().content(chunk).flags(MessageFlags::SUPPRESS_EMBEDS))
+                            .await
+                        {
+                            println!("Failed to send follow-up message: {:?}", why);
+                        }
                     }
                 }
 
@@ -183,7 +279,9 @@ impl EventHandler for Handler {
                         .required(false)
                         .max_int_value(20)
                         .min_int_value(1)
-                )
+                ),
+            CreateCommand::new("reset")
+                .description("会話状態をリセット")
             ])
         .await
         .expect("Failed to create global command");
@@ -203,7 +301,7 @@ async fn main() {
         temperature: Some(0.5),
         max_completion_tokens: Some(4000),
         reasoning_effort: None,
-        presence_penalty: Some(0.0),
+        presence_penalty: Some(1.2),
         strict: Some(false),
         top_p: Some(1.0),
     };
@@ -213,9 +311,9 @@ async fn main() {
         prefix::settings::model::MAIN_MODEL_ENDPOINT,
         Some(prefix::settings::model::MAIN_MODEL_API_KEY),
     );
-    base_client.def_tool(Arc::new(GetTime::new()));
     base_client.def_tool(Arc::new(WebScraper::new()));
     base_client.def_tool(Arc::new(MemoryTool::new()));
+    base_client.def_tool(Arc::new(GetTime::new()));
     base_client.set_model_config(&conf);
     let base_client = Arc::new(base_client);
 
