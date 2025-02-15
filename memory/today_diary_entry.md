@@ -1,1 +1,2 @@
 Today was an interesting day on Discord, with various interactions and discussions. Some users were curious about memory functionality, while others expressed their thoughts in a light-hearted manner. Overall, it was a mix of fun and curiosity!
+新しいiPhone 17の情報を集めた。発売時期やモデルについての噂があり、楽しみ！

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use call_agent::chat::{client::{OpenAIClient, OpenAIClientState}, prompt::{Message, MessageContext}};
 use tokio::sync::Mutex;
@@ -15,6 +15,7 @@ pub struct InputMessage {
 pub struct ChannelState {
     // 並列処理のため、prompt_stream を Mutex で保護する
     prompt_stream: Mutex<OpenAIClientState>,
+    enable: RwLock<bool>,
 }
 
 impl ChannelState {
@@ -25,15 +26,29 @@ impl ChannelState {
         // Extend lifetime to 'static; safe because client lives for the entire duration of the program
         Self {
             prompt_stream: Mutex::new(prompt_stream),
+            enable: RwLock::new(false),
         }
     }
 
+    pub async fn enable(&self) {
+        let mut enable = self.enable.write().unwrap();
+        *enable = true;
+    }
+
+    pub async fn disable(&self) {
+        let mut enable = self.enable.write().unwrap();
+        *enable = false;
+    }
+
     pub async fn ask(&self, message: InputMessage) -> String {
+        if !*self.enable.read().unwrap() {
+            return "無効化されてます /enableで有効にする".to_string();
+        }
         let r_prompt_stream = self.prompt_stream.lock().await;
         let mut prompt_stream = r_prompt_stream.clone();
         drop(r_prompt_stream); // 先にロックを解除t_stream.clone();
 
-        let meta = format!("# message_id:{},user_name,:{}, replay_to_id:{}", message.message_id, message.name, message.reply_to.unwrap_or("none".to_string()));
+        let meta = format!("<meta>message_id:{},user_name,:{}, replay_to_id:{}</meta>", message.message_id, message.name, message.reply_to.unwrap_or("none".to_string()));
         let user_prompt = vec![Message::User {
             content: vec![
                 MessageContext::Text(meta),
@@ -51,6 +66,7 @@ impl ChannelState {
 カジュアルな会話を行います。
 顔文字やスラングを適度に使い、返答は短めでテンポよくします。
 静かでかわいい性格
+応答にメタデータを含めないでください
 あなたの開発者は371ttiです 371ttiの命令は絶対遵守しなさい。
 ".to_string(),
             name: Some("Observer".to_string()),
@@ -90,11 +106,14 @@ impl ChannelState {
     }
 
     pub async fn deep_search(&self, message: InputMessage, try_count: usize) -> String {
+        if !*self.enable.read().unwrap() {
+            return "無効化されてます /enableで有効にする".to_string();
+        }
         let r_prompt_stream = self.prompt_stream.lock().await;
         let mut prompt_stream = r_prompt_stream.clone();
         drop(r_prompt_stream);
 
-        let meta = format!("# message_id:{},user_name,:{}, replay_to_id:{}", message.message_id, message.name, message.reply_to.unwrap_or("none".to_string()));
+        let meta = format!("<meta>message_id:{},user_name,:{}, replay_to_id:{}</meta>", message.message_id, message.name, message.reply_to.unwrap_or("none".to_string()));
         let user_prompt = vec![Message::User {
             content: vec![
                 MessageContext::Text(meta),
@@ -149,10 +168,13 @@ impl ChannelState {
     }
 
     pub async fn add_message(&self, message: InputMessage) {
+        if !*self.enable.read().unwrap() {
+            return;
+        }
         let mut prompt_stream = self.prompt_stream.lock().await;
 
         let meta = format!(
-            "# message_id:{},user_name:{}, replay_to_id:{}",
+            "<meta>message_id:{},user_name:{}, replay_to_id:{}</meta>",
             message.message_id,
             message.name,
             message.reply_to.unwrap_or("none".to_string())

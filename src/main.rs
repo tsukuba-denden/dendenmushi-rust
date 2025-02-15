@@ -105,6 +105,48 @@ impl EventHandler for Handler {
                     }
                 }
 
+                "enable" => {
+                    let state = if let Some(existing) = self.channels.get(&command.channel_id) {
+                        existing.clone()
+                    } else {
+                        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+                        self.channels.insert(command.channel_id, new_state.clone());
+                        new_state
+                    };
+
+                    state.enable().await;
+
+                    let response_data = CreateInteractionResponseMessage::new()
+                    .content("AIを有効化しました");
+
+                    let response = CreateInteractionResponse::Message(response_data);
+
+                    if let Err(why) = command.create_response(&ctx.http, response).await {
+                        println!("Failed to respond to enable: {:?}", why);
+                    }
+                }
+
+                "disable" => {
+                    let state = if let Some(existing) = self.channels.get(&command.channel_id) {
+                        existing.clone()
+                    } else {
+                        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+                        self.channels.insert(command.channel_id, new_state.clone());
+                        new_state
+                    };
+
+                    state.disable().await;
+
+                    let response_data = CreateInteractionResponseMessage::new()
+                    .content("AIを無効化しました");
+
+                    let response = CreateInteractionResponse::Message(response_data);
+
+                    if let Err(why) = command.create_response(&ctx.http, response).await {
+                        println!("Failed to respond to disable: {:?}", why);
+                    }
+                }
+
                 "ask" => {
                     // 考え中
                     let defer_response = CreateInteractionResponse::Defer(
@@ -281,7 +323,12 @@ impl EventHandler for Handler {
                         .min_int_value(1)
                 ),
             CreateCommand::new("reset")
-                .description("会話状態をリセット")
+                .description("会話状態をリセット"),
+
+            CreateCommand::new("enable")
+                .description("AIを有効化"),
+            CreateCommand::new("disable")
+                .description("AIを無効化"),
             ])
         .await
         .expect("Failed to create global command");
