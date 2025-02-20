@@ -91,7 +91,6 @@ impl GetTime {
         let utc_now: DateTime<Utc> = Utc::now();
         let local_time = utc_now.with_timezone(tz);
 
-        print!("The current time in {} ({}) is: {} \n\n\n", country_code, tz, local_time);
         Ok(format!("The current time in {} ({}) is: {}", country_code, tz, local_time))
     }
 }

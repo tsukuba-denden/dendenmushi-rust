@@ -33,7 +33,6 @@ impl Tool for TextLengthTool {
     }
 
     fn run(&self, args: Value) -> Result<String, String> {
-        println!("{:?}", args);
         // JSONから"text"キーを取得
         let text = args["text"].as_str()
             .ok_or_else(|| "Missing 'text' parameter".to_string())?;

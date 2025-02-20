@@ -252,13 +252,13 @@ impl WebScraper {
         let items: Vec<ScrapedItem> = document
             .select(&selector)
             .map(|element| {
-                let raw_text = element.text().collect::<Vec<_>>().join(" ");
-                let text = raw_text.split_whitespace().collect::<String>();
+            let raw_text = element.text().collect::<Vec<_>>().join(" ");
+            let text = raw_text.split_whitespace().collect::<Vec<_>>().join(" ");
 
-                let href = element.value().attr("href").map(|s| s.to_string());
-                let link = element.value().attr("src").map(|s| s.to_string());
+            let href = element.value().attr("href").map(|s| s.to_string());
+            let link = element.value().attr("src").map(|s| s.to_string());
 
-                ScrapedItem { text, link: href.or(link) }
+            ScrapedItem { text, link: href.or(link) }
             })
             .filter(|item| !item.text.is_empty() || item.link.is_some())
             .collect();
@@ -288,7 +288,7 @@ impl WebScraper {
             String::from("--host-resolver-rules=MAP localhost 127.255.255.255"),
         ]).launch().await.map_err(|_| ScraperError::LaunchError)?;
         let context = browser.context_builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko, OBSERVER SCRAPER) Chrome/120.0.0.0 Safari/537.36")
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
             .await.map_err(|_| ScraperError::ContextError)?;
 
@@ -315,6 +315,7 @@ impl WebScraper {
         // すべてのテキストとリンクをまとめる
         for item in content.items {
             combined_text.push_str(&item.text);
+            combined_text.push_str(" ");
     
             if let Some(link) = item.link {
                 combined_text.push_str(&format!("({})", link));
@@ -375,13 +376,16 @@ impl Tool for WebScraper {
 
     fn def_description(&self) -> &str {
 "Extracts webpage content using a CSS selector (avoid '*', use specific tags like 'p, h1, h2, h3, a').  
-Supports 'reqwest' (fast) and 'playwright' (beta, may be unstable) for JavaScript-heavy pages.  
-Use 'seek_pos' and 'max_length' to paginate (e.g., 0-3999, 4000-7999) for full extraction.  
+Supports 'reqwest' (fast) and 'playwright' (for JavaScript-heavy pages).  
+Use 'seek_pos' and 'max_length' to paginate (e.g., 0-3999, 4000-3999) for full extraction.
+If the content is too long, use 'seek_pos' and 'max_length' to paginate the results.
 **If no content is retrieved, consider:**
 - The site may require JavaScript rendering ('playwright' mode).
 - The selector may be incorrect.
-- The site may block scraping.  
-IMPORTANT: **Always include the scraped URL at the end of your response.**"
+- The site may block scraping.
+IMPORTANT: **Always must include the scraped URL at the end of your response.**
+IMPORTANT: Do not use imaginary URLs.
+For searching, use Bing."
     }
 
     fn def_parameters(&self) -> serde_json::Value {

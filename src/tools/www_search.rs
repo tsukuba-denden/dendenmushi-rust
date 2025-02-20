@@ -1,70 +1,92 @@
-use serde::{Serialize, Deserialize};
-use std::error::Error;
-use tokio;
+use playwright::Playwright;
+use urlencoding::encode;
 
-use super::web_scraper::WebScraper;
+use super::web_scraper::ScraperError;
 
-#[derive(Debug, Serialize, Deserialize)]
+/// 検索結果のうち、hover‑url 属性を持つ要素のテキスト（題名）と属性値（リンク）を保持する構造体
+#[derive(Debug, Clone)]
 pub struct BingSearchResult {
     pub title: String,
-    pub link: String,
-    pub snippet: Option<String>,
+    pub link: String, // hover‑url 属性の値
 }
 
-#[derive(Clone)]
-pub struct BingSearch {
-    scraper: WebScraper,
+/// Bing の検索結果ページから、hover‑url 属性を持つ `<a>` 要素を抽出するスクレイパー
+pub struct BingSearchScraper {
+    playwright: Playwright,
 }
 
-impl BingSearch {
-    /// 新しい `BingSearch` インスタンスを作成
-    pub fn new() -> Self {
-        BingSearch {
-            scraper: WebScraper::new(),
-        }
+impl BingSearchScraper {
+    /// 新しいインスタンスを生成する
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let playwright = Playwright::initialize().await?;
+        Ok(BingSearchScraper { playwright })
     }
 
-    /// Bing検索を実行し、結果を取得する
-    pub async fn search(&self, query: &str) -> Result<Vec<BingSearchResult>, Box<dyn Error>> {
-        let encoded_query = urlencoding::encode(query);
-        let bing_url = format!("https://www.bing.com/search?q={}", encoded_query);
+    /// 指定したクエリで Bing 検索を実行し、hover‑url 属性を持つ `<a>` 要素から題名とリンクを取得する
+    pub async fn search(&self, query: &str) -> Result<Vec<BingSearchResult>, Box<dyn std::error::Error>> {
+        // クエリを URL エンコードして Bing の検索 URL を生成
+        let encoded_query = encode(query);
+        let url = format!("https://www.bing.com/search?q={}", encoded_query);
 
-        // Bing の検索結果ページからデータを取得
-        let scraped_data = self.scraper.scrape_playwright(&bing_url, "li.b_algo").await?;
+        // ブラウザ起動 (headless モードではなく表示状態にしてデバッグ可能)
+        let browser = self.playwright
+            .chromium()
+            .launcher()
+            .headless(false)
+            .args(&vec![
+                String::from("--enable-features=BlockInsecurePrivateNetworkRequests"),
+                String::from("--disable-file-system"),
+                String::from("--disable-popup-blocking"),
+                String::from("--disable-web-security"),
+                String::from("--disable-webgl"),
+                String::from("--disable-webrtc"),
+                String::from("--disable-camera"),
+                String::from("--disable-microphone"),
+                String::from("--disable-media-source"),
+                String::from("--host-resolver-rules=MAP localhost 127.255.255.255"),
+            ])
+            .launch()
+            .await
+            .map_err(|_| ScraperError::LaunchError)?;
+            
+        let context = browser
+            .context_builder()
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko, OBSERVER) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+            .await
+            .map_err(|_| ScraperError::ContextError)?;
+        let page = context.new_page().await.map_err(|_| ScraperError::PageError)?;
 
+        // 任意の初期化スクリプト（stealth対策など）
+        page.add_init_script(include_str!("stealth.min.js"))
+            .await
+            .map_err(|_| ScraperError::ScriptError)?;
+
+        // 指定の URL に移動 (タイムアウトは 10秒)
+        page.goto_builder(&url)
+            .timeout(10000.0)
+            .goto()
+            .await
+            .map_err(|_| ScraperError::NetworkError)?;
+        
+        // まず、hover‑url 属性を持つ `<a>` 要素が存在するのを待機
+        page.wait_for_selector_builder("a[hover-url]")
+            .timeout(10000000.0)
+            .wait_for_selector()
+            .await
+            .map_err(|_| ScraperError::TimeoutError)?;
+
+        // ページ内のすべての a[hover-url] 要素を取得
+        let elements = page.query_selector_all("a[hover-url]").await?;
         let mut results = Vec::new();
 
-        for item in scraped_data.items {
-            // テキストが空でないかチェック
-            if !item.text.is_empty() {
-                if let Some(link) = item.link {
-                    if WebScraper::is_safe_url(&link) {
-                        results.push(BingSearchResult {
-                            title: item.text,
-                            link,
-                            snippet: None, // スニペットを取得する場合は追加処理が必要
-                        });
-                    }
-                }
-            }
+        for element in elements {
+            let title = element.inner_text().await?;
+            let link = element.get_attribute("hover-url").await?.unwrap_or_default();
+            results.push(BingSearchResult { title, link });
         }
 
+        browser.close().await?;
         Ok(results)
-    }
-}
-
-#[cfg(test)]
-mod tests { 
-    use super::*;
-
-    #[tokio::test]
-    async fn test_bing_search() {
-        let bing_search = BingSearch::new();
-        let results = bing_search.search("Rust programming").await.unwrap();
-
-        assert!(!results.is_empty());
-        for result in results {
-            println!("{:?}", result);
-        }
     }
 }

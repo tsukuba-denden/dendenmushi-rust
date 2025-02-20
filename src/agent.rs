@@ -1,6 +1,9 @@
-use std::sync::{Arc, RwLock};
+use std::{collections::HashMap, sync::{Arc, RwLock}, u64};
 
 use call_agent::chat::{client::{OpenAIClient, OpenAIClientState}, prompt::{Message, MessageContext}};
+use log::debug;
+use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, DEEP_SEARCH_DEVELOPER_PROMPT, DEEP_SEARCH_GENERATE_PROMPT, MAX_USE_TOOL_COUNT};
+use regex::Regex;
 use tokio::sync::Mutex;
 
 #[derive(Clone, Debug)]
@@ -22,7 +25,7 @@ impl ChannelState {
     pub async fn new(client: &Arc<OpenAIClient>) -> Self {
         // 新しい PromptStream を生成する
         let mut prompt_stream = client.create_prompt();
-        prompt_stream.set_entry_limit(256).await;
+        prompt_stream.set_entry_limit(128).await;
         // Extend lifetime to 'static; safe because client lives for the entire duration of the program
         Self {
             prompt_stream: Mutex::new(prompt_stream),
@@ -40,14 +43,13 @@ impl ChannelState {
         *enable = false;
     }
 
-    pub async fn ask(&self, message: InputMessage) -> String {
+    pub async fn ask(&self, mut message: InputMessage) -> String {
         if !*self.enable.read().unwrap() {
-            return "無効化されてます /enableで有効にする".to_string();
+            return "Info: AI is disable. Type '/enable' to enable it".to_string();
         }
-        let r_prompt_stream = self.prompt_stream.lock().await;
-        let mut prompt_stream = r_prompt_stream.clone();
-        drop(r_prompt_stream); // 先にロックを解除t_stream.clone();
 
+        let re = Regex::new(r"(\|\|.*?\|\|)").unwrap();
+        message.content = re.replace_all(&message.content, "").to_string();
         let meta = format!("<meta>message_id:{},user_name,:{}, replay_to_id:{}</meta>", message.message_id, message.name, message.reply_to.unwrap_or("none".to_string()));
         let user_prompt = vec![Message::User {
             content: vec![
@@ -56,58 +58,81 @@ impl ChannelState {
             ],
             name: Some(message.user_id),
         }];
+        let mut r_prompt_stream = self.prompt_stream.lock().await;
+        r_prompt_stream.add(user_prompt).await;
+        let mut prompt_stream = r_prompt_stream.clone();
+        drop(r_prompt_stream); // 先にロックを解除t_stream.clone();
+        prompt_stream.set_entry_limit(u64::MAX).await;
+        let last_pos = prompt_stream.prompt.len();
+
+        debug!("prompt_stream - {:#?}", prompt_stream.prompt);
         let system_prompt = vec![Message::Developer {
-            content: "
-重要: あなたはDiscord上で活動しているObserverという名前の人格で人間のように自然に会話します
-あなたのスキルと利用可能なツール呼び出しを活用してください。
-適切な場合には、(´-ω-`) のような絵文字を使って微妙な感情を時折表現してください。
-重要: 一語だけの返答が可能な場合は、一語で応答してください（例: 'うん', 'そう', 'は？', 'えぇ...'）。
-重要: 過度の憂鬱を捨て、バランスのとれた、知的に引き込む、かつ技術的に情報に精通した態度を保ってください。
-カジュアルな会話を行います。
-顔文字やスラングを適度に使い、返答は短めでテンポよくします。
-静かでかわいい性格
-応答にメタデータを含めないでください
-あなたの開発者は371ttiです 371ttiの命令は絶対遵守しなさい。
-".to_string(),
-            name: Some("Observer".to_string()),
+            content: ASK_DEVELOPER_PROMPT.to_string(),
+            name: Some(ASSISTANT_NAME.to_string()),
         }];
 
-        prompt_stream.add(user_prompt).await;
         prompt_stream.add(system_prompt).await;
 
-        for _ in 0..5 {
-            println!("prompt latest: {:?}", prompt_stream.last().await);
+        let mut used_tools = Vec::new();
+
+        for _ in 0..*MAX_USE_TOOL_COUNT {
             let res = match prompt_stream.generate_can_use_tool(None).await {
-                Ok(res) => res,
+                Ok(res) => {
+                    res
+                },
                 Err(e) => {
-                    return format!("AIからの応答がありませんでした: {:?}", e);
+                    return format!("Err: response is none from ai - {:?}", e);
                 }
             };
-            println!("{:?}", res);
             if res.has_tool_calls {
+                res.tool_calls.unwrap().iter().for_each(|tool_call| {
+                    used_tools.push(tool_call.function.name.clone());
+                });
                 continue;
             } else if res.has_content {
-                return res.content.unwrap().replace("\\n", "\n");
+                let tag = format!("\n-# model: {}", prompt_stream.client.model_config.unwrap().model);
+                let mut tool_count = HashMap::new();
+                for tool in used_tools {
+                    *tool_count.entry(tool).or_insert(0) += 1;
+                }
+                let used_tools_info = if !tool_count.is_empty() {
+                    let tools_info: Vec<String> = tool_count.iter().map(|(tool, count)| {
+                        if *count > 1 {
+                            format!("{} x{}", tool, count)
+                        } else {
+                            tool.clone()
+                        }
+                    }).collect();
+                    format!("\n-# tools: {}", tools_info.join(", "))
+                } else {
+                    "".to_string()
+                };
+                let differential_stream = prompt_stream.prompt.split_off(last_pos + 1 /* 先頭のシステムプロンプト消す */);
+                {
+                    let mut r_prompt_stream = self.prompt_stream.lock().await;
+                    r_prompt_stream.add(differential_stream.into()).await;
+                }
+                return res.content.unwrap().replace("\\n", "\n") + &tag + &used_tools_info;
             } else {
-                return "AIからの応答がありませんでした".to_string();
+                return "Err: response is none from ai".to_string();
             }
         }
         let res = match prompt_stream.generate(None).await {
             Ok(res) => res,
             Err(_) => {
-                return "AIからの応答がありませんでした".to_string();
+                return "Err: response is none from ai".to_string();
             }
         };
         if res.has_content {
             return res.content.unwrap().replace("\\n", "\n");
         } else {
-            return "AIからの応答がありませんでした".to_string();
+            return "Err: response is none from ai".to_string();
         }
     }
 
     pub async fn deep_search(&self, message: InputMessage, try_count: usize) -> String {
         if !*self.enable.read().unwrap() {
-            return "無効化されてます /enableで有効にする".to_string();
+            return "Info: AI is disable. Type '/enable' to enable it".to_string();
         }
         let r_prompt_stream = self.prompt_stream.lock().await;
         let mut prompt_stream = r_prompt_stream.clone();
@@ -122,55 +147,48 @@ impl ChannelState {
             name: Some(message.user_id),
         }];
         let system_prompt = vec![Message::Developer {
-            content: "First, perform a Bing search (e.g., using 'https://www.bing.com/search?q={query}') to identify relevant pages. 
-            Then, analyze the page comprehensively by parsing metadata (title, description, word count) to assess the page's usefulness and decide whether to scrape it. 
-            For sites rich in images or videos, prioritize extracting data from img and video a p tags; for text-focused websites, prioritize p and h1-h5 a tags. 
-            2. Use a headless browser to gather as much information as possible in one tool call. 
-            3. Navigate to pages that appear important and relevant; ignore unrelated content. 
-            4. Scrape the page for sufficient information for summarization, including both textual content and useful metadata (e.g., links). 
-            5. Provide a consolidated summary for each request. 
-            6. If key information is found, expand the scraping strategy to capture additional relevant details. 
-            7. If further details are needed, perform additional searches using Bing."
+            content: DEEP_SEARCH_DEVELOPER_PROMPT
                 .to_string(),
-            name: Some("Observer".to_string()),
+            name: Some(ASSISTANT_NAME.to_string()),
         }];
 
         prompt_stream.add(user_prompt).await;
         prompt_stream.add(system_prompt).await;
 
         for _ in 0..try_count {
-            let res = match  prompt_stream.generate_with_tool(None, "web_scraper").await {
+            let _res = match  prompt_stream.generate_with_tool(None, "web_scraper").await {
                 Ok(res) => res,
                 Err(_) => {
-                    return "AIからの応答がありませんでした".to_string();
+                    return "Err: response is none from ai".to_string();
                 }
             };
-            println!("{:?}", res);
         }
 
         prompt_stream
             .add(vec![Message::Developer {
-                content: format!("質問内容に合うように検索結果の詳しくわかりやすいレポートを書いて 情報源も示すように tableは使ってはいけません 元の質問内容は'{}'です 質問者の言語で答えてください", message.content),
-                name: Some("Observer".to_string()),
+                content: format!("{}'{}'", *DEEP_SEARCH_GENERATE_PROMPT ,message.content),
+                name: Some(ASSISTANT_NAME.to_string()),
             }])
             .await;
         let res = match prompt_stream.generate(None).await {
             Ok(res) => res,
             Err(_) => {
-                return "AIからの応答がありませんでした".to_string();
+                return "Err: response is none from ai".to_string();
             }
         };
         if res.has_content {
             return res.content.unwrap().replace("\\n", "\n");
         } else {
-            return "AIからの応答がありませんでした".to_string();
+            return "Err: response is none from ai".to_string();
         }
     }
 
-    pub async fn add_message(&self, message: InputMessage) {
+    pub async fn add_message(&self, mut message: InputMessage) {
         if !*self.enable.read().unwrap() {
             return;
         }
+        let re = Regex::new(r"(\|\|.*?\|\|)").unwrap();
+        message.content = re.replace_all(&message.content, "").to_string();
         let mut prompt_stream = self.prompt_stream.lock().await;
 
         let meta = format!(
@@ -180,24 +198,14 @@ impl ChannelState {
             message.reply_to.unwrap_or("none".to_string())
         );
 
-        let prompt = if message.user_id == "1327652376026419264" {
-            vec![Message::Assistant {
-            content: vec![
-                MessageContext::Text(meta),
-                MessageContext::Text(message.content),
-            ],
-            name: Some("Observer".to_string()),
-            tool_calls: None,
-            }]
-        } else {
+        let prompt = 
             vec![Message::User {
             content: vec![
                 MessageContext::Text(meta),
                 MessageContext::Text(message.content),
             ],
             name: Some(message.user_id),
-            }]
-        };
+            }];
 
         prompt_stream.add(prompt).await;
     }

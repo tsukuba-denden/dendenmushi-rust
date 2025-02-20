@@ -1,4 +1,3 @@
 /target
 .env
-src/prefix.rs
-src/brain/prefix.rs
+config.json

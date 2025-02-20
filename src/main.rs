@@ -3,17 +3,18 @@ use agent::{ChannelState, InputMessage};
 use dashmap::DashMap;
 mod agent;
 
-use call_agent::chat::{
-    client::{ModelConfig, OpenAIClient},
-    prompt::{Message, MessageContext},
-};
-use observer::{prefix, tools::{self, get_time::GetTime}};
+use call_agent::chat::client::{ModelConfig, OpenAIClient};
+use observer::{prefix::{ASSISTANT_NAME, DISCORD_TOKEN, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS}, tools::{self, get_time::GetTime, web_deploy::{WebDeploy}}};
+use tokio::io::AsyncBufReadExt;
 use tools::{memory::MemoryTool, web_scraper::WebScraper};
 
-use serenity::{all::{CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EditInteractionResponse}, async_trait};
+use serenity::{all::{CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EditInteractionResponse}, async_trait, futures::{self}};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
+use futures::StreamExt;
+use std::time::Duration;
+use log::{error, info, warn};
 
 struct Handler {
     // Handlerに1つのOpenAIClientを保持
@@ -26,6 +27,12 @@ struct Handler {
 impl EventHandler for Handler {
     /// メッセージが送信されたときの処理
     async fn message(&self, ctx: Context, msg: serenity::all::Message) {
+        // Bot自身のメッセージは無視する
+        let bot_id = ctx.cache.current_user().id;
+        if msg.author.id == bot_id {
+            return;
+        }
+
         let state = if let Some(existing) = self.channels.get(&msg.channel_id) {
             Arc::clone(&existing)
         } else {
@@ -42,10 +49,9 @@ impl EventHandler for Handler {
             user_id: msg.author.id.to_string(),
         };
 
-        println!("Message: {:?}", message.clone());
+        info!("Message: {:?}", message.clone());
 
         // このメッセージがBotにメンションされているかどうかを確認
-        let bot_id = ctx.cache.current_user().id;
         let is_mentioned = msg.mentions.iter().any(|user| user.id == bot_id);
 
         // Botにメンションされている場合はAIに質問し、そうでない場合は会話履歴に追加
@@ -57,22 +63,24 @@ impl EventHandler for Handler {
                 async move {
                     loop {
                         if let Err(e) = channel_id.broadcast_typing(&ctx.http).await {
-                            println!("Error setting typing indicator: {:?}", e);
+                            error!("setting typing indicator - {:?}", e);
                         }
                         tokio::time::sleep(std::time::Duration::from_secs(8)).await;
                     }
                 }
             });
-
-            let answer_text = state.ask(message).await;
+            let answer_text = match tokio::time::timeout(Duration::from_secs(30), state.ask(message)).await {
+                Ok(answer) => answer,
+                Err(_) => "Err: timeout".to_string(),
+            };
             typing_task.abort();
             
             let response = CreateMessage::new()
-            .content(answer_text)
-            .flags(MessageFlags::SUPPRESS_EMBEDS);
-    
+                .content(answer_text)
+                .flags(MessageFlags::SUPPRESS_EMBEDS);
+        
             if let Err(why) = msg.channel_id.send_message(&ctx.http, response).await {
-                println!("Err: {:?}", why);
+                error!("{:?}", why);
             }
         } else {
             state.add_message(message).await;
@@ -89,19 +97,28 @@ impl EventHandler for Handler {
                     let response = CreateInteractionResponse::Message(response_data);
 
                     if let Err(why) = command.create_response(&ctx.http, response).await {
-                        println!("Failed to respond to ping: {:?}", why);
+                        error!("Failed to respond to ping - {:?}", why);
                     }
                 }
 
                 "reset" => {
-                    self.channels.remove(&command.channel_id);
+                    let state = if let Some(existing) = self.channels.get(&command.channel_id) {
+                        existing.clone()
+                    } else {
+                        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+                        self.channels.insert(command.channel_id, new_state.clone());
+                        new_state
+                    };
+
+                    state.clear_prompt().await;
+
                     let response_data = CreateInteractionResponseMessage::new()
-                    .content("脳りせっと");
+                    .content("reset brain");
 
                     let response = CreateInteractionResponse::Message(response_data);
 
                     if let Err(why) = command.create_response(&ctx.http, response).await {
-                        println!("Failed to respond to reset: {:?}", why);
+                        error!("Failed to respond to reset: {:?}", why);
                     }
                 }
 
@@ -117,12 +134,12 @@ impl EventHandler for Handler {
                     state.enable().await;
 
                     let response_data = CreateInteractionResponseMessage::new()
-                    .content("AIを有効化しました");
+                    .content("Info: Enabled AI");
 
                     let response = CreateInteractionResponse::Message(response_data);
 
                     if let Err(why) = command.create_response(&ctx.http, response).await {
-                        println!("Failed to respond to enable: {:?}", why);
+                        error!("Failed to respond to enable - {:?}", why);
                     }
                 }
 
@@ -138,12 +155,12 @@ impl EventHandler for Handler {
                     state.disable().await;
 
                     let response_data = CreateInteractionResponseMessage::new()
-                    .content("AIを無効化しました");
+                    .content("Info: Disabled AI");
 
                     let response = CreateInteractionResponse::Message(response_data);
 
                     if let Err(why) = command.create_response(&ctx.http, response).await {
-                        println!("Failed to respond to disable: {:?}", why);
+                        error!("Failed to respond to disable - {:?}", why);
                     }
                 }
 
@@ -153,7 +170,7 @@ impl EventHandler for Handler {
                         CreateInteractionResponseMessage::new()
                     );
                     if let Err(why) = command.create_response(&ctx.http, defer_response).await {
-                        println!("Failed to send Defer response: {:?}", why);
+                        error!("Failed to send Defer response - {:?}", why);
                         return;
                     }
 
@@ -198,7 +215,7 @@ impl EventHandler for Handler {
                     if let Some(first_chunk) = chunks.get(0) {
                         let response = EditInteractionResponse::new().content(first_chunk);
                         if let Err(why) = command.edit_response(&ctx.http, response).await {
-                            println!("Failed to edit response: {:?}", why);
+                            error!("Failed to edit response - {:?}", why);
                         }
                     }
 
@@ -208,7 +225,7 @@ impl EventHandler for Handler {
                             .create_followup(&ctx.http, CreateInteractionResponseFollowup::new().content(chunk).flags(MessageFlags::SUPPRESS_EMBEDS))
                             .await
                         {
-                            println!("Failed to send follow-up message: {:?}", why);
+                            error!("Failed to send follow-up message - {:?}", why);
                         }
                     }
                 }
@@ -220,7 +237,7 @@ impl EventHandler for Handler {
                         CreateInteractionResponseMessage::new()
                     );
                     if let Err(why) = command.create_response(&ctx.http, defer_response).await {
-                        println!("Failed to send Defer response: {:?}", why);
+                        error!("Failed to send Defer response - {:?}", why);
                         return;
                     }
 
@@ -271,7 +288,7 @@ impl EventHandler for Handler {
                     if let Some(first_chunk) = chunks.get(0) {
                         let response = EditInteractionResponse::new().content(first_chunk);
                         if let Err(why) = command.edit_response(&ctx.http, response).await {
-                            println!("Failed to edit response: {:?}", why);
+                            error!("Failed to edit response - {:?}", why);
                         }
                     }
 
@@ -281,54 +298,119 @@ impl EventHandler for Handler {
                             .create_followup(&ctx.http, CreateInteractionResponseFollowup::new().content(chunk).flags(MessageFlags::SUPPRESS_EMBEDS))
                             .await
                         {
-                            println!("Failed to send follow-up message: {:?}", why);
+                            error!("Failed to send follow-up message - {:?}", why);
                         }
                     }
                 }
 
+                "collect_history" => {
+                    let entry_num = command.data.options[0].value.as_i64().unwrap_or(32) as usize;
+                    let state = if let Some(existing) = self.channels.get(&command.channel_id) {
+                        existing.clone()
+                    } else {
+                        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+                        self.channels.insert(command.channel_id, new_state.clone());
+                        new_state
+                    };
+                    let mut messages_stream = Box::pin(command.channel_id.messages_iter(&ctx.http).take(entry_num));
+                    let mut messages_vec = Vec::new();
+                    while let Some(message_result) = messages_stream.next().await {
+                        if let Ok(message) = message_result {
+                            messages_vec.push(message);
+                        }
+                    }
+                    for message in messages_vec.into_iter().rev() {
+                        state.add_message(InputMessage {
+                            content: message.content.clone(),
+                            name: message.author.name.clone(),
+                            message_id: message.id.to_string(),
+                            reply_to: message.referenced_message.as_ref().map(|m| m.id.to_string()),
+                            user_id: message.author.id.to_string(),
+                        }).await;
+                    }
+                    
+                    let response_data = CreateInteractionResponseMessage::new()
+                        .content(format!("Info: Complete collecting history ({} entries)", entry_num));
 
-                _ => println!("Unknown command: {}", command.data.name),
+                    let response = CreateInteractionResponse::Message(response_data);
+
+                    if let Err(why) = command.create_response(&ctx.http, response).await {
+                        error!("Failed to respond to collect_history - {:?}", why);
+                    }
+                }
+
+
+                _ => warn!("Unknown command: {}", command.data.name),
             }
         }
     }
 
     /// Bot が起動したときの処理
     async fn ready(&self, ctx: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        info!("{} is connected!", ready.user.name);
+
+        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
+        tokio::spawn(async move {
+            let stdin = tokio::io::stdin();
+            new_state.enable().await;
+            let mut reader = tokio::io::BufReader::new(stdin).lines();
+
+            while let Ok(Some(line)) = reader.next_line().await {
+                if line == "exit" {
+                    break;
+                }
+
+                let message = InputMessage {
+                    content: line,
+                    name: "root".to_string(),
+                    message_id: "Null".to_string(),
+                    reply_to: None,
+                    user_id: "Null".to_string(),
+                };
+
+                let rs = new_state.ask(message).await;
+                info!("AI:\n{}\n\n", rs);
+            }
+        });
 
         // グローバルコマンドを登録
         Command::set_global_commands(&ctx.http, vec![
             CreateCommand::new("ping")
-                .description("Pong! 🏓")
-                .add_option(
-                    CreateCommandOption::new(CommandOptionType::String, "返す内", "Pong! 🏓")
-                        .required(true)
-                ),
+                .description("Pong! 🏓"),
             CreateCommand::new("ask")
-                .description("observerに話しかける")
+                .description(format!("ask {}", *ASSISTANT_NAME))
                 .add_option(
-                    CreateCommandOption::new(CommandOptionType::String, "内容", "Observerに質問する内容")
+                    CreateCommandOption::new(CommandOptionType::String, "content", "question to ask")
                         .required(true)
                 ),
             CreateCommand::new("deep_search")
-                .description("observerに深いスクレイピングをさせる")
+                .description("search deeply in internet")
                 .add_option(
-                    CreateCommandOption::new(CommandOptionType::String, "内容", "Observerに質問する内容")
+                    CreateCommandOption::new(CommandOptionType::String, "content", "query to search")
                         .required(true)
                 )
                 .add_option(
-                    CreateCommandOption::new(CommandOptionType::Integer, "試行回数", "試行回数")
+                    CreateCommandOption::new(CommandOptionType::Integer, "trials_num", "number of trials")
                         .required(false)
                         .max_int_value(20)
                         .min_int_value(1)
                 ),
             CreateCommand::new("reset")
-                .description("会話状態をリセット"),
+                .description("reset brain"),
 
             CreateCommand::new("enable")
-                .description("AIを有効化"),
+                .description("enable AI"),
+
             CreateCommand::new("disable")
-                .description("AIを無効化"),
+                .description("disable AI"),
+
+            CreateCommand::new("collect_history")
+                .description("collect message history")
+                .add_option(
+                    CreateCommandOption::new(CommandOptionType::Integer, "entry_num", "number of entries to collect")
+                        .max_int_value(128)
+                        .min_int_value(1)
+                ),
             ])
         .await
         .expect("Failed to create global command");
@@ -337,16 +419,31 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
+    // ロガーの初期化
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Debug)
+        .filter_module("serenity", log::LevelFilter::Off) // serenityクレートのログを除外
+        .filter_module("reqwest", log::LevelFilter::Off) // reqwestクレートのログを除外
+        .filter_module("hyper", log::LevelFilter::Off) // hyperクレートのログを除外
+        .filter_module("rustls", log::LevelFilter::Off) // rustlsクレートのログを除外
+        .filter_module("h2", log::LevelFilter::Off) // h2クレートのログを除外
+        .filter_module("tungstenite", log::LevelFilter::Off) // tungsteniteクレートのログを除外
+        .filter_module("tracing", log::LevelFilter::Off) // tracingクレートのログを除外
+        .filter_module("html5ever", log::LevelFilter::Off) // html5everクレートのログを除外
+        .filter_module("selectors", log::LevelFilter::Off) // selectorsクレートのログを除外
+        .filter_module("playwright", log::LevelFilter::Off) // markup5everクレートのログを除外
+        .init();
+
     // Discord Bot のトークンを取得
-    let token = prefix::settings::DISCORD_TOKEN;
+    let token = *DISCORD_TOKEN;
 
     // モデル設定
     let conf = ModelConfig {
         model: "gpt-4o-mini".to_string(),
-        model_name: None,
+        model_name: Some(ASSISTANT_NAME.to_string()),
         parallel_tool_calls: None,
         temperature: Some(0.5),
-        max_completion_tokens: Some(4000),
+        max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
         reasoning_effort: None,
         presence_penalty: Some(1.2),
         strict: Some(false),
@@ -355,29 +452,20 @@ async fn main() {
 
     // 基本となる OpenAIClient を生成し、ツールを定義
     let mut base_client = OpenAIClient::new(
-        prefix::settings::model::MAIN_MODEL_ENDPOINT,
-        Some(prefix::settings::model::MAIN_MODEL_API_KEY),
+        *MAIN_MODEL_ENDPOINT,
+        Some(*MAIN_MODEL_API_KEY),
     );
+
+    let web_deploy = Arc::new(WebDeploy::new().await);
+    web_deploy.start_server("0.0.0.0:80".to_string());
     base_client.def_tool(Arc::new(WebScraper::new()));
     base_client.def_tool(Arc::new(MemoryTool::new()));
     base_client.def_tool(Arc::new(GetTime::new()));
+    base_client.def_tool(web_deploy);
     base_client.set_model_config(&conf);
     let base_client = Arc::new(base_client);
 
-    let mut c = base_client.create_prompt();
-    c.add(vec![Message::User {
-        content: vec![MessageContext::Text("こんにちは".to_string())],
-        name: Some("Observer".to_string()),
-    }])
-    .await;
-
-    let rs = c.generate(None).await;
-
-    println!("{:?}", rs);
-
-    let r = c.last().await.unwrap();
-
-    print!("{:?}", r);
+    let channels = DashMap::new();
 
 
     // Bot のインテント設定（MESSAGE_CONTENT を含む）
@@ -385,12 +473,12 @@ async fn main() {
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler {
             base_client,
-            channels: DashMap::new(),
+            channels: channels,
         })
         .await
         .expect("Error creating client");
 
     if let Err(e) = client.start().await {
-        println!("Client error: {:?}", e);
+        error!("Client error: {:?}", e);
     }
 }

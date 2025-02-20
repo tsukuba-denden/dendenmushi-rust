@@ -4,9 +4,10 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use chrono::{DateTime, Local};
+use log::error;
 
 const MEMORY_DIR: &str = "memory";
 const MAX_KEYS: usize = 100;
@@ -30,7 +31,7 @@ impl MemoryTool {
 
         // memory ディレクトリがなければ作成
         if let Err(e) = fs::create_dir_all(MEMORY_DIR) {
-            eprintln!("Failed to create memory directory: {}", e);
+            error!("Failed to create memory directory: {}", e);
         } else {
             // memory/ 内の .md ファイルをすべて読み込む
             if let Ok(entries) = fs::read_dir(MEMORY_DIR) {
@@ -44,13 +45,13 @@ impl MemoryTool {
                                     let mut file = match fs::File::open(&path) {
                                         Ok(f) => f,
                                         Err(e) => {
-                                            eprintln!("Failed to open file {:?}: {}", path, e);
+                                            error!("Failed to open file {:?}: {}", path, e);
                                             continue;
                                         }
                                     };
                                     let mut contents = String::new();
                                     if let Err(e) = file.read_to_string(&mut contents) {
-                                        eprintln!("Failed to read file {:?}: {}", path, e);
+                                        error!("Failed to read file {:?}: {}", path, e);
                                         continue;
                                     }
                                     mem_map.insert(stem.to_string(), contents);
@@ -122,7 +123,7 @@ impl MemoryTool {
                 let file_path = Self::get_file_path(k);
                 if file_path.exists() {
                     if let Err(e) = fs::remove_file(&file_path) {
-                        eprintln!("Failed to remove file {:?}: {}", file_path, e);
+                        error!("Failed to remove file {:?}: {}", file_path, e);
                     }
                 }
             }
@@ -134,7 +135,7 @@ impl MemoryTool {
                         let path = entry.path();
                         if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
                             if let Err(e) = fs::remove_file(&path) {
-                                eprintln!("Failed to remove file {:?}: {}", path, e);
+                                error!("Failed to remove file {:?}: {}", path, e);
                             }
                         }
                     }
@@ -182,9 +183,9 @@ impl Tool for MemoryTool {
     }
 
     fn def_description(&self) -> &str {
-        "This tool is used to periodically save links, materials, diary entries, interesting conversations, and fascinating insights. \
-Each record is stored as a separate .md file in the 'memory' directory, with a maximum of 100 entries. \
-Use 'add' to create or update an entry, 'push' to append to an existing entry, 'get' to retrieve records (with last modified date), \
+        "This tool is used to periodically save links, materials, diary entries, interesting conversations, and fascinating insights.
+Each record is stored as a separate .md file in the 'memory' directory, with a maximum of 100 entries.
+Use 'add' to create or update an entry, 'push' to append to an existing entry, 'get' to retrieve records (with last modified date),
 'get_keys' to list all entries, and 'clear' to remove an entry (if a key is provided) or all entries."
     }
 
