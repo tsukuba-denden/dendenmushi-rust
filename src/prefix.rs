@@ -8,6 +8,7 @@ pub struct ModelSettings {
     pub model_generate_max_tokens: usize,
     pub main_model_endpoint: String,
     pub main_model_api_key: String,
+    pub model_name: String,
     pub judge_model_endpoint: String,
     pub judge_model_api_key: String,
 }
@@ -44,6 +45,7 @@ lazy_static::lazy_static! {
     pub static ref DEEP_SEARCH_GENERATE_PROMPT: &'static str = &CONFIG.prompt.deep_search_generate_prompt;
     pub static ref DISCORD_TOKEN: &'static str = &CONFIG.discord_token;
     pub static ref DOMAIN: &'static str = &CONFIG.server_domain;
+    pub static ref MODEL_NAME: &'static str = &CONFIG.model.model_name;
 }
 
 impl Settings {
@@ -57,6 +59,7 @@ impl Settings {
         "model_generate_max_tokens": 4096,
         "main_model_endpoint": "https://api.openai.com/v1/",
         "main_model_api_key": "YOUR_API_KEY",
+        "model_name": "gpt-4o-mini",
         "judge_model_endpoint": "https://localhost:84/v1/",
         "judge_model_api_key": ""
     },

@@ -25,3 +25,6 @@ actix-web = "4.9.0"
 
 [patch.crates-io]
 call-agent = { path = "C:/RustBuilds/call-agent" }
+
+[profile.release]
+opt-level = 3
