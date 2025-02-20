@@ -4,7 +4,7 @@ use dashmap::DashMap;
 mod agent;
 
 use call_agent::chat::client::{ModelConfig, OpenAIClient};
-use observer::{prefix::{ASSISTANT_NAME, DISCORD_TOKEN, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS}, tools::{self, get_time::GetTime, web_deploy::{WebDeploy}}};
+use observer::{prefix::{ASSISTANT_NAME, DISCORD_TOKEN, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS}, tools::{self, get_time::GetTime, web_deploy::WebDeploy}};
 use tokio::io::AsyncBufReadExt;
 use tools::{memory::MemoryTool, web_scraper::WebScraper};
 
