@@ -27,4 +27,8 @@ actix-web = "4.9.0"
 call-agent = { path = "C:/RustBuilds/call-agent" }
 
 [profile.release]
-opt-level = 3
+opt-level = "z"  # サイズを最小化するための最適化
+lto = true       # リンクタイム最適化を有効にする
+codegen-units = 1 # コード生成ユニットを1つにする
+panic = "abort"  # パニック時にアボートする
+strip = true     # デバッグ情報を削除する

@@ -1,4 +1,4 @@
-use std::{io::{self, Write}, panic, process, sync::Arc};
+use std::sync::Arc;
 use agent::{ChannelState, InputMessage};
 use dashmap::DashMap;
 mod agent;
@@ -69,7 +69,7 @@ impl EventHandler for Handler {
                     }
                 }
             });
-            let answer_text = match tokio::time::timeout(Duration::from_secs(30), state.ask(message)).await {
+            let answer_text = match tokio::time::timeout(Duration::from_secs(120), state.ask(message)).await {
                 Ok(answer) => answer,
                 Err(_) => "Err: timeout".to_string(),
             };
