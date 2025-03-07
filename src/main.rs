@@ -74,13 +74,43 @@ impl EventHandler for Handler {
                 Err(_) => "Err: timeout".to_string(),
             };
             typing_task.abort();
-            
-            let response = CreateMessage::new()
-                .content(answer_text)
-                .flags(MessageFlags::SUPPRESS_EMBEDS);
-        
-            if let Err(why) = msg.channel_id.send_message(&ctx.http, response).await {
-                error!("{:?}", why);
+
+            // 改行単位で分割し、2000文字を超えないようにする
+            let mut chunks = Vec::new();
+            let mut current_chunk = String::new();
+
+            for line in answer_text.lines() {
+                if current_chunk.len() + line.len() + 1 > 2000 {
+                    chunks.push(current_chunk);
+                    current_chunk = String::new();
+                }
+                if !current_chunk.is_empty() {
+                    current_chunk.push('\n');
+                }
+                current_chunk.push_str(line);
+            }
+            if !current_chunk.is_empty() {
+                chunks.push(current_chunk);
+            }
+
+            // 最初のメッセージを送信
+            if let Some(first_chunk) = chunks.get(0) {
+                let response = CreateMessage::new()
+                    .content(first_chunk)
+                    .flags(MessageFlags::SUPPRESS_EMBEDS);
+                if let Err(why) = msg.channel_id.send_message(&ctx.http, response).await {
+                    error!("{:?}", why);
+                }
+            }
+
+            // 残りのメッセージを送信
+            for chunk in &chunks[1..] {
+                let response = CreateMessage::new()
+                    .content(chunk)
+                    .flags(MessageFlags::SUPPRESS_EMBEDS);
+                if let Err(why) = msg.channel_id.send_message(&ctx.http, response).await {
+                    error!("{:?}", why);
+                }
             }
         } else {
             state.add_message(message).await;
@@ -442,10 +472,10 @@ async fn main() {
         model: MODEL_NAME.to_string(),
         model_name: Some(ASSISTANT_NAME.to_string()),
         parallel_tool_calls: None,
-        temperature: Some(0.5),
+        temperature: None,
         max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-        reasoning_effort: None,
-        presence_penalty: Some(1.2),
+        reasoning_effort: Some("low".to_string()),
+        presence_penalty: None,
         strict: Some(false),
         top_p: Some(1.0),
     };
