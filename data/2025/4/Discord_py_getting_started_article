@@ -1,0 +1,85 @@
+# Discord.py の始め方
+
+こんにちは(´-ω-`)
+
+この記事では、初心者でも簡単にDiscord.pyを利用してDiscord Botを構築するための手順を、詳しく丁寧に説明します。プロジェクトに取り組む際の基本的なセットアップから、シンプルなBotの実装例、そして動作確認までの流れを網羅しています。
+
+## 1. Pythonのインストール
+
+まず、最新のPythonがインストールされていることを確認してください。Pythonの公式サイト（[python.org](https://www.python.org)）からダウンロードし、インストール済みであることを確認します。
+
+- Windowsの場合、インストーラー実行時に「Add Python to PATH」にチェックを入れると便利です。
+
+## 2. Discord.py のインストール
+
+ターミナルまたはコマンドプロンプトを開いて、以下のコマンドを入力します。
+
+```
+pip install -U discord.py
+```
+
+このコマンドは、最新のDiscord.pyライブラリをインストールまたは更新します。
+
+## 3. Discord Developer PortalでBotを作成
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) にアクセスし、Discordのアカウントでログインします。
+2. 「New Application」をクリックし、アプリケーション名を入力します。
+3. 左側のメニューから「Bot」を選択し、「Add Bot」をクリックしてBotを作成します。
+4. 作成後、Botの「TOKEN」をコピーします。このトークンは後ほどBotを実行するために必要です（他の人に漏らさないように注意してください）。
+
+## 4. シンプルなBotの作成
+
+以下のコードは、基本的なBotを作成するサンプルプログラムです。ユーザーからの「ping」というメッセージに対して「pong」と返信する機能を実装しています。
+
+```python
+import discord
+
+class MyClient(discord.Client):
+    async def on_ready(self):
+        print(f'Logged in as {self.user}')
+
+    async def on_message(self, message):
+        # 自分のメッセージには反応しない
+        if message.author == self.user:
+            return
+        
+        if message.content.lower() == 'ping':
+            await message.channel.send('pong')
+
+client = MyClient()
+client.run('YOUR_BOT_TOKEN')  # ここに自分のBotトークンを入力
+```
+
+このコードをファイル（例: `bot.py`）として保存し、ターミナルで以下のように実行します。
+
+```
+python bot.py
+```
+
+以上で、Botが起動し、Discordサーバー内で動作するはずです。
+
+## 5. Bot の招待
+
+Botを作成したら、次はサーバーに招待します。以下のURLフォーマットを使用して招待リンクを生成してください（`CLIENT_ID` はDiscord Developer Portalから取得したアプリケーションのIDに置き換えます）：
+
+```
+https://discord.com/api/oauth2/authorize?client_id=CLIENT_ID&permissions=8&scope=bot
+```
+
+このリンクを使えば、自分のサーバーにBotを招待することができます。
+
+## 6. 次のステップ
+
+- より複雑な機能を実装するには、Discord.pyの[公式ドキュメント](https://discordpy.readthedocs.io/) を参照してください。
+- イベントハンドラやコマンドの作成、エラーハンドリング、そして非同期プログラミングの知識が深まると、さらに高度なBotを作れるようになります。
+
+## まとめ
+
+この記事では、基本的なDiscord.pyのセットアップからシンプルなBotの構築まで、そのすべての手順を説明しました。初めてDiscord Botを作る方にも理解しやすい内容を目指しています。これを土台として、さらにカスタマイズされたBot開発のチャレンジに取り組んでみてください。
+
+Happy Coding(´-ω-`)
+
+【情報源】
+- [Python公式サイト](https://www.python.org)
+- [Discord Developer Portal](https://discord.com/developers/applications)
+- [Discord.py公式ドキュメント](https://discordpy.readthedocs.io/)

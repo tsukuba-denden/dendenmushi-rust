@@ -1,0 +1,199 @@
+# LLVM IR 構文サマリー
+
+このドキュメントでは、LLVM Intermediate Representation (IR) の構文要素をできる限り網羅的に解説します。初めてLLVM IRに触れる方から、リファレンスとして利用したい方までを対象としています。サンプルコードと説明を交えつつ、モジュール構造、型、定数、グローバル、関数、命令、メタデータなどを詳述します。
+
+---
+
+## 1. モジュール構造
+
+LLVM IR はひとつ以上のモジュール（`.ll` ファイル）で構成され、以下の要素を含みます:
+
+- ソースファイル名ディレクティブ: `source_filename = "<name>"`
+- ターゲットトリプル: `target triple = "<triple>"`
+- データレイアウト: `target datalayout = "<layout>"`
+- グローバル変数・定数定義: `@name = global|constant <type> <value>`
+- 外部宣言（関数・グローバル）: `declare <ret> @func(<args>)`
+- 関数定義: `define <ret> @func(<args>) { ... }`
+- エイリアスやコンストロクトセグメント: `@alias = alias ...`
+
+### 例
+```llvm
+; モジュールヘッダ
+source_filename = "example.c"
+target triple = "x86_64-pc-linux-gnu"
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+
+; グローバル定数
+@.str = private constant [14 x i8] c"Hello, LLVM!\00"
+
+; 外部関数宣言
+declare i32 @puts(i8*)
+``` 
+
+---
+
+## 2. 基本型 (Primitive Types)
+
+| 型      | 説明                   | 
+|--------|-----------------------|
+| `void` | 戻り値なし             |
+| `iN`   | Nビット符号なし整数    |
+| `float`, `double` | IEEE 浮動小数点 |
+| `x86_fp80`, `fp128`, `ppc_fp128` | 拡張浮動 |
+| `label` | 基本ブロックのラベル |
+| `metadata` | メタデータ |
+| `token` | 非同期パイプライン |
+
+---
+
+## 3. 複合型 (Derived Types)
+
+- ポインタ: `<type>*`
+- 配列: `[N x <type>]`
+- ベクトル: `<N x <type>]`
+- 構造体: `{ <type1>, <type2>, ... }`
+- ラスト型: `<type> <alignment>` (アライメント付き)
+
+### 例
+```llvm
+%struct.Point = type { i32, i32 }
+@arr = global [5 x i32] [i32 1, i32 2, i32 3, i32 4, i32 5]
+``` 
+
+---
+
+## 4. 関数定義と宣言
+
+### 宣言 (External Declaration)
+```llvm
+declare i32 @sum(i32, i32)
+``` 
+
+### 定義 (Definition)
+```llvm
+define i32 @sum(i32 %a, i32 %b) #0 {
+entry:
+  %add = add i32 %a, %b
+  ret i32 %add
+}
+``` 
+
+#### 関数属性
+- `#0 = { nounwind readnone }` などの属性グループを定義可。
+
+---
+
+## 5. 基本ブロック (Basic Block)
+
+- ラベル: `<label>:`
+- 命令のシーケンス
+- 終端命令 (branch, ret, switch など)
+
+### 例
+```llvm
+entry:
+  br label %check
+
+check:
+  %cmp = icmp sgt i32 %x, 0
+  br i1 %cmp, label %positive, label %negative
+``` 
+
+---
+
+## 6. 命令セット (Instructions)
+
+以下に主要な命令カテゴリを示します。
+
+### 6.1 メモリアクセス
+- `alloca`: スタック上に領域を確保
+- `load`: メモリから値を読み込み
+- `store`: メモリへ値を書き込み
+- `getelementptr`: ポインタ演算
+
+```llvm
+%ptr = alloca i32, align 4
+store i32 42, i32* %ptr, align 4
+%val = load i32, i32* %ptr, align 4
+``` 
+
+### 6.2 算術・ビット演算
+- `add`, `sub`, `mul`, `udiv`, `sdiv`, `urem`, `srem`
+- `shl`, `lshr`, `ashr`, `and`, `or`, `xor`
+
+### 6.3 比較命令
+- 整数比較: `icmp <pred>`, `<pred>` は `eq, ne, ugt, uge, ult, ule, sgt, sge, slt, sle`
+- 浮動小数点比較: `fcmp <pred>`, `<pred>` は `oeq, ogt, olt, uge, ugt ...`
+
+### 6.4 コントロールフロー
+- 無条件分岐: `br label %dest`
+- 条件分岐: `br i1 %cond, label %trueblock, label %falseblock`
+- `switch`: 多岐分岐
+- `invoke` / `landingpad`: 例外処理
+
+### 6.5 関数呼び出し
+- `call`: 関数呼び出し
+- 引数、呼び出し属性を指定可能
+
+```llvm
+%res = call i32 @sum(i32 %a, i32 %b)
+``` 
+
+### 6.6 型変換・キャスト
+- `bitcast`, `inttoptr`, `ptrtoint`
+- `zext`, `sext`, `fptrunc`, `fpext`, `uitofp`, `sitofp`, `fptoui`, `fptosi`
+
+---
+
+## 7. グローバル変数・定数
+
+- `global`: 書き込み可能
+- `constant`: 読み取り専用
+- 可視性: `private`, `internal`, `external`
+
+```llvm
+@gvar = global i32 0, align 4
+@cstr = constant [6 x i8] c"Hello\00", align 1
+``` 
+
+---
+
+## 8. メタデータ (Metadata)
+
+- デバッグ情報や最適化ヒントを埋め込む
+- `!dbg`, `!tbaa`, `!invariant.load` など
+
+```llvm
+!0 = !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang 12.0.0")
+``` 
+
+---
+
+## 9. 属性グループ (Attribute Groups)
+
+関数や呼び出し点の属性をまとめる:
+```llvm
+attributes #0 = { nounwind readonly }
+``` 
+
+---
+
+## 10. モジュールレベルアトリビュート
+
+- `module asm`、`!llvm.module.flags` など
+
+```llvm
+!llvm.module.flags = !{
+  !{i32 1, !"wchar_size", i32 4}
+}
+``` 
+
+---
+
+## 参考文献
+- LLVM Language Reference Manual: https://llvm.org/docs/LangRef.html
+- LLVM Getting Started Guide: https://llvm.org/docs/GettingStarted.html
+
+---
+
+*以上でLLVM IR 構文の主要要素をまとめました。詳細は公式ドキュメント参照をおすすめします。*

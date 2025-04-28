@@ -1,0 +1,84 @@
+# LLVM IR 環境構築ガイド (Windows 編)
+
+このガイドでは、Windows 環境で LLVM IR を書き、コンパイル・実行するための手順を解説します。初めて LLVM IR に触れる方でも理解できるよう、必要なツールの導入からサンプル実行までをカバーしています。
+
+## 1. 前提条件
+- Windows 10 以上
+- 管理者権限でのインストールが可能
+
+## 2. LLVM ツールチェーンの導入
+1. LLVM のインストーラーをダウンロード
+   - 公式サイト: https://llvm.org/releases/ 
+   - 最新の Windows 用インストーラー (例: `LLVM-<version>-win64.exe`) を取得
+
+2. インストール手順
+   1. ダウンロードしたインストーラーを実行
+   2. インストール先 (例: `C:\Program Files\LLVM`) を指定
+   3. インストールオプションで「Add LLVM to the system PATH」にチェック
+
+3. 動作確認
+   - PowerShell やコマンドプロンプトを再起動し、以下を実行:
+     ```powershell
+     clang --version
+     llc --version
+     lli --version
+     ```
+   - バージョン情報が表示されれば成功です。
+
+## 3. エディタ/IDE の準備
+- 任意のテキストエディタ (VSCode、Sublime Text、Vim など)
+- LLVM IR 用のシンタックスハイライト拡張 (例: VSCode の `llvm` 拡張)
+
+## 4. サンプル: LLVM IR ファイルの作成と実行
+
+1. `hello.ll` を作成:
+   ```llvm
+   ; ModuleID = 'hello'
+   source_filename = "hello.c"
+
+   define i32 @main() {
+   entry:
+     %msg = call i8* @puts(i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str, i32 0, i32 0))
+     ret i32 0
+   }
+
+   declare i32 @puts(i8*)
+
+   @.str = private constant [14 x i8] c"Hello, LLVM IR\0A\00"
+   ```
+
+2. 実行方法
+   - インタプリタ実行:
+     ```powershell
+     lli hello.ll
+     ```
+   - ネイティブコード生成 + 実行:
+     ```powershell
+     llc -filetype=obj hello.ll -o hello.obj
+     clang hello.obj -o hello.exe
+     .\hello.exe
+     ```
+
+## 5. VSCode タスク設定例 (オプション)
+```jsonc
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build and Run LLVM IR",
+      "type": "shell",
+      "command": "lli ${file}",
+      "group": "build",
+      "presentation": { "reveal": "always" }
+    }
+  ]
+}
+```
+
+## 6. まとめ
+- LLVM のインストールとパス設定
+- テキストエディタの準備
+- サンプル実行手順
+- 必要に応じて VSCode などでタスクを設定
+
+以上で、Windows 環境における LLVM IR の執筆・実行環境が整いました。

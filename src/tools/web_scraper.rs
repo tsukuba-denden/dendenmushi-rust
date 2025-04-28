@@ -187,19 +187,19 @@ pub struct ScrapedData {
 }
 
 #[derive(Clone)]
-pub struct WebScraper {
+pub struct Browser {
     client: Client,
 }
 
-impl WebScraper {
+impl Browser {
     /// 新しいWebScraperインスタンスを生成する
     pub fn new() -> Self {
         let client = Client::builder()
-            .user_agent("Mozilla/5.0 (compatible; WebScraper/1.0)")
+            .user_agent("Mozilla/5.0 (compatible; Browser/1.0)")
             .timeout(std::time::Duration::from_secs(10))
             .build()
             .expect("Failed to build reqwest client");
-        WebScraper { client }
+        Browser { client }
     }
 
     /// 通常の HTTP スクレイピング（reqwest）
@@ -369,9 +369,9 @@ impl WebScraper {
 }
 
 /// AI Functionとして利用するための `Tool` トレイト実装
-impl Tool for WebScraper {
+impl Tool for Browser {
     fn def_name(&self) -> &str {
-        "web_scraper"
+        "browser"
     }
 
     fn def_description(&self) -> &str {
@@ -445,7 +445,7 @@ For searching, use Bing."
 
         let scraper = self.clone();
 
-        WebScraper::is_safe_url(&url).then(|| ()).ok_or_else(|| "Are you try hacking me?".to_string())?;
+        Browser::is_safe_url(&url).then(|| ()).ok_or_else(|| "Are you try hacking me?".to_string())?;
 
         let result = std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
@@ -460,7 +460,7 @@ For searching, use Bing."
         .map_err(|_| "Thread panicked".to_string())?
         .map_err(|e| format!("Scrape error: {}", e))?;
 
-        let res = WebScraper::compress_content(result, seek_pos, max_length);
+        let res = Browser::compress_content(result, seek_pos, max_length);
         serde_json::to_string(&res).map_err(|e| format!("Serialization error: {}", e))
     }
 }

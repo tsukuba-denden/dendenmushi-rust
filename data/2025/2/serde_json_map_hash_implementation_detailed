@@ -1,0 +1,63 @@
+# serde_jsonのMapにおけるハッシュ実装について
+
+## 概要
+`serde_json`はRustプログラミング言語用のJSONシリアライザおよびデシリアライザであり、非常に効率的なデータ管理を提供します。このライブラリでは、JSONオブジェクトを表現するために`Map`型が使用されます。デフォルトでは、`BTreeMap`を基盤としており、順序を保持しつつ高速なアクセスを可能にしています。しかし、`preserve_order`機能を有効にすると、`IndexMap`を使用することもできます。
+
+### ハッシュの重要性
+ハッシュは、データ構造においてキーと値のペアを迅速に検索するために不可欠です。特に、`serde_json`の`Map`型においては、ハッシュ化されたエントリを利用することで、データへのアクセスを効率化しています。これにより、開発者は柔軟にJSONデータを扱うことができるようになります。
+
+## ハッシュ実装の詳細
+`serde_json`の`Map`型におけるハッシュの実装は以下のようになっています。
+
+### 1. `Hash`トレイトの実装
+`Map<String, Value>`は`Hash`トレイトを実装しており、次のように定義されています:
+```rust
+impl Hash for Map<String, Value> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        #[cfg(not(feature = "preserve_order"))]
+        {
+            self.map.hash(state);
+        }
+        
+        #[cfg(feature = "preserve_order")]
+        {
+            let mut kv = Vec::from_iter(&self.map);
+            kv.sort_unstable_by(|a, b| a.0.cmp(b.0));
+            kv.hash(state);
+        }
+    }
+}
+```
+この実装では、`preserve_order`が無効の場合は単純に`BTreeMap`のハッシュを計算します。一方、有効な場合は、全てのエントリを取得し、それらをソートした後にハッシュ化します。これにより、同じ内容の異なる順序のマップでも一貫したハッシュ値が得られます。
+
+### 2. エントリの取り扱い
+各エントリは`(String, Value)`のペアとして扱われ、そのペアの順序が保持されるかどうかによってハッシュ計算が変わります。これにより、開発者は柔軟にデータを操作することができます。
+
+### 3. コード例
+以下は、`serde_json`の`Map`におけるハッシュの使用例です。
+```rust
+use serde_json::{Map, Value};
+
+// Mapの作成とハッシュ計算
+let mut map = Map::new();
+map.insert("key1".to_string(), Value::from(10));
+map.insert("key2".to_string(), Value::from(20));
+
+let mut hasher = std::collections::hash_map::DefaultHasher::new();
+map.hash(&mut hasher);
+let hash_value = hasher.finish();
+println!("Hash value: {}", hash_value);
+```
+このコードでは、`Map`を作成し、いくつかのエントリを挿入した後、そのハッシュ値を計算しています。
+
+## BTreeとIndexMapの選択
+`serde_json`では、デフォルトで`BTreeMap`が使用されていますが、`preserve_order`機能を有効にすると`IndexMap`が使用されます。これにより、開発者は必要に応じてデータの順序を保持することができます。
+
+- **BTreeMap**: 自動的にキーをソートし、高速な検索を提供します。
+- **IndexMap**: 挿入順序を保持しながら、キーへの高速アクセスを可能にします。
+
+## 結論
+このように、`serde_json`の`Map`型はBTreeまたはIndexMapを基盤にしつつ、ハッシュ機能を持つことで柔軟かつ効率的なデータ管理を実現しています。これにより、開発者はJSONデータを簡単に扱うことができ、パフォーマンスも最適化されています。
+
+## 参考文献
+- [serde_json GitHub Repository](https://github.com/serde-rs/json)

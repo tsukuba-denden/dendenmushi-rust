@@ -1,0 +1,187 @@
+# ウェブで動作する高機能席替えアプリの作り方
+
+この記事では、1ファイル完結のHTMLで動く「席替えアプリ」を作成する手順を解説します。本アプリの特徴は以下のとおりです。
+
+- 列数・行数を自由に設定
+- 四角／丸の座席形状を指定
+- 空席をセルクリックで簡単登録
+- 名前を改行区切りで入力
+- 名簿番号＋名前をセットでランダムにめくる演出
+
+初めての方でもわかるように、完成コードと動作のポイントを丁寧に説明します。では始めましょう。
+
+---
+
+## 1. HTMLファイル全体構成
+
+1つのHTMLファイルに以下の要素を含めます。
+
+- `<style>`：座席セルとカードの見た目を決めるCSS
+- 入力フォーム：列数、行数、形状セレクト、名前リスト
+- グリッド表示領域：席配置／結果表示用の2つの`<div>`
+- `<script>`：セル生成、空席登録、シャッフル、演出ロジック
+
+サンプルコードは後述します。
+
+---
+
+## 2. 制御部のポイント
+
+### 2.1 グリッド生成
+
+- ボタンを押すと、`cols×rows`のセルを配列`seats`で管理
+- 各セルにインデックス（名簿番号）を表示
+- セレクトの値で`.shape-rectangle`または`.shape-circle`のクラスを適用し、丸／四角を切り替え
+
+### 2.2 空席指定
+
+- セルをクリックすると、そのセルの`empty`フラグを反転
+- 空席時はグレー背景になり、ラベルを消去
+
+### 2.3 名前の入力と検証
+
+- テキストエリアに改行区切りで名前を入力
+- 総入力行数と有効席数（空席以外の席数）を一致させないとエラー
+
+### 2.4 シャッフルとカード演出
+
+1. 名前配列をFisher–Yatesアルゴリズムでランダムソート
+2. `seats`の有効セル順にシャッフルした名前を紐付け
+3. 結果グリッドで全席分のカードを生成し、背面に「名簿番号＋名前」をセット
+4. カードを別配列でランダムソートし、`setTimeout`で順次`.flipped`クラスを付与して“めくり”アニメーションを実現
+
+---
+
+## 3. 完成コード
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>席替えアプリ</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; background: #f5f5f5; }
+    .controls { margin-bottom: 1rem; }
+    input, select, textarea, button { font-size: 14px; margin-right: .5rem; }
+    textarea { width: 100%; height: 80px; margin-top: .5rem; }
+    #seatGrid, #resultGrid { display: grid; gap: 4px; margin-top: .5rem; }
+    .cell, .card {
+      width: 60px; height: 40px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; user-select: none; border: 1px solid #ccc; background: #fff;
+      transition: background .2s;
+    }
+    .cell.empty { background: #eee; cursor: default; }
+    .shape-rectangle { border-radius: 4px; }
+    .shape-circle    { border-radius: 50%; }
+    .card            { perspective: 600px; }
+    .inner {
+      width: 100%; height: 100%; position: relative;
+      transform-style: preserve-3d; transition: transform .4s;
+    }
+    .inner.flipped { transform: rotateY(180deg); }
+    .face {
+      position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; text-align: center; padding: 2px; box-sizing: border-box;
+    }
+    .front { background: #88c; color: #fff; }
+    .back  { background: #fff; transform: rotateY(180deg); }
+  </style>
+</head>
+<body>
+  <h1>席替えアプリ</h1>
+  <div class="controls">
+    <label>列数<input type="number" id="cols" value="5" min="1"></label>
+    <label>行数<input type="number" id="rows" value="4" min="1"></label>
+    <label>形状<select id="shape">
+        <option value="shape-rectangle">四角</option>
+        <option value="shape-circle">丸</option>
+      </select>
+    </label>
+    <button id="makeGrid">グリッド作成</button>
+  </div>
+  <div>
+    <p>名前を改行区切りで入力</p>
+    <textarea id="nameList" placeholder="田中 太郎&#10;山田 花子"></textarea>
+  </div>
+  <p>セルをクリックすると空席に</p>
+  <div id="seatGrid"></div>
+
+  <button id="shuffle">シャッフル＆めくり開始</button>
+  <div id="resultGrid"></div>
+
+  <script>
+    const seatGrid   = document.getElementById('seatGrid');
+    const resultGrid = document.getElementById('resultGrid');
+    let seats = [];
+
+    document.getElementById('makeGrid').addEventListener('click', () => {
+      const cols  = +document.getElementById('cols').value;
+      const rows  = +document.getElementById('rows').value;
+      const shape = document.getElementById('shape').value;
+      seats = Array(rows * cols).fill(0).map((_, i) => ({ idx: i, empty: false }));
+      seatGrid.style.gridTemplateColumns = `repeat(${cols}, 60px)`;
+      seatGrid.innerHTML = '';
+      seats.forEach(s => {
+        const d = document.createElement('div');
+        d.className = `cell ${shape}`;
+        d.textContent = s.idx + 1;
+        d.addEventListener('click', () => {
+          s.empty = !s.empty;
+          d.classList.toggle('empty', s.empty);
+          d.textContent = s.empty ? '' : s.idx + 1;
+        });
+        seatGrid.appendChild(d);
+      });
+      resultGrid.innerHTML = '';
+    });
+
+    document.getElementById('shuffle').addEventListener('click', () => {
+      const names = document.getElementById('nameList').value
+        .split('\n').map(s => s.trim()).filter(s => s);
+      const validSeats = seats.filter(s => !s.empty);
+      if (names.length !== validSeats.length) {
+        alert('名前の数と空席以外の席数が不一致です');
+        return;
+      }
+      for (let i = names.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [names[i], names[j]] = [names[j], names[i]];
+      }
+      const cols  = +document.getElementById('cols').value;
+      const shape = document.getElementById('shape').value;
+      resultGrid.style.gridTemplateColumns = `repeat(${cols}, 60px)`;
+      resultGrid.innerHTML = '';
+      const assignments = seats.map(s => s.empty ? null : `${s.idx + 1} ${names.shift()}`);
+      seats.forEach((_, i) => {
+        const card  = document.createElement('div'); card.className = `card ${shape}`;
+        const inner = document.createElement('div'); inner.className = 'inner';
+        const front = document.createElement('div'); front.className = 'face front';
+        const back  = document.createElement('div'); back.className = 'face back';
+        back.textContent = assignments[i] || '';
+        inner.append(front, back); card.append(inner); resultGrid.append(card);
+      });
+      Array.from(resultGrid.children)
+        .sort(() => Math.random() - .5)
+        .forEach((c, i) => setTimeout(() => c.firstChild.classList.add('flipped'), i * 300));
+    });
+  </script>
+</body>
+</html>
+```  
+
+---
+
+## 4. 解説のポイント
+
+1. **セル・カードの見た目**  
+   `.shape-rectangle`／`.shape-circle` でボーダー半径を変更  
+2. **空席管理**  
+   クリックで`empty`フラグを反転し、背景色とテキストをON/OFF  
+3. **シャッフルアルゴリズム**  
+   Fisher–Yatesで公平なランダム並び替え  
+4. **アニメーション**  
+   CSSの`perspective`＋`transform: rotateY`を使った裏返し演出
+
+これで自由度の高い席替えアプリが完成です。ぜひ自分のクラスやイベントで活用してください。

@@ -1,0 +1,130 @@
+# CSV読み込み時に設定を優先する席替えアプリの拡張方法
+
+このドキュメントでは、先にご紹介した「席替えアプリ（CSV対応版）」に対して、`setting.csv`をロードした時点でどんな列数・行数・空席設定を行っても、CSVの配置内容を優先表示する機能を追加する手順を解説します。
+
+---
+
+## 1. 機能要件
+
+1. ファイル名が `setting.csv` のCSVを読み込むと、アプリ側の列数・行数・空席情報を強制的に上書きする。
+2. 読み込まれたCSVの行順がそのままシャッフル後の座席配置として表示される。
+3. `setting.csv` を読み込んだ後は、グリッド生成や名前入力、空席設定ボタンは一切無効化する。
+
+---
+
+## 2. 主要な実装ポイント
+
+### 2.1 CSV読み込みハンドラの修正
+
+1. ファイル選択時にファイル名をチェックし、`setting.csv` であれば特別扱い。
+2. `FileReader` で読み込んだテキストを改行で分割し、各行を `id,name` の形式でパース。
+3. パース結果を新たに `seats` と `assignments` 配列にセット。
+4. グリッドを再描画し、読み込み済みモードをフラグで管理。
+
+### 2.2 グリッド生成・操作の無効化
+
+- `setting.csv` 読み込み後は、以下の要素を `disabled` に設定:
+  - 列数/行数の入力欄
+  - `makeGrid` ボタン
+  - 名前入力テキストエリア
+  - シャッフルボタン
+  - CSVエクスポートボタン
+
+### 2.3 即時表示
+
+- CSVロード完了後、自動的に結果グリッドを生成し、裏返しアニメーションはスキップして背面の名簿番号＋名前をそのまま表示。
+
+---
+
+## 3. サンプルコード（追加・修正箇所）
+以下は先行版からの追加・変更点のみ抜粋します。
+
+```html-svelte
+<script>
+  let forceMode = false;
+  let assignments = [];
+
+  // CSV表示モード切替ハンドラ
+  toggleBtn.addEventListener('click', () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.csv';
+    fileInput.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const lines = ev.target.result.trim().split('\n');
+        // ファイル名で判定 (setting.csv)
+        if (file.name === 'setting.csv') {
+          forceMode = true;
+          // 列数・行数はCSV行数から自動算出可能 (固定列数なら設定)
+          // ここでは行に含まれるカンマ数+1を列数、行数をlines.lengthとする例
+          const cols = lines[0].split(',').length - 1;
+          const rows = lines.length;
+          document.getElementById('cols').value = cols;
+          document.getElementById('rows').value = rows;
+          disableControls();
+          // seats, assignments を上書き
+          seats = Array(rows * cols).fill(0).map((_,i) => ({ idx: i, empty: false }));
+          assignments = lines.map(l => l.trim());
+          renderResult(true);
+        } else {
+          // 従来のCSV表示モード
+          renderCsvView(lines);
+        }
+      };
+      reader.readAsText(file);
+    };
+    fileInput.click();
+  });
+
+  function disableControls() {
+    ['cols','rows','makeGrid','nameList','shuffle','exportCsv']
+      .forEach(id => document.getElementById(id).disabled = true);
+  }
+
+  // 結果表示関数にforceModeフラグ追加
+  function renderResult(skipAnimation = false) {
+    const cols = +document.getElementById('cols').value;
+    resultGrid.style.gridTemplateColumns = `repeat(${cols},60px)`;
+    resultGrid.innerHTML = '';
+    // assignments があればそれを優先
+    const items = forceMode ? assignments : assignments.slice();
+    seats.forEach((s,i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const inner = document.createElement('div'); inner.className = 'inner';
+      const front = document.createElement('div'); front.className = 'face front';
+      const back  = document.createElement('div'); back.className = 'face back';
+      back.textContent = items[i] || '';
+      inner.append(front, back); card.append(inner);
+      resultGrid.append(card);
+      if (!skipAnimation) {
+        setTimeout(() => inner.classList.add('flipped'), i * 300);
+      } else {
+        inner.classList.add('flipped');
+      }
+    });
+  }
+</script>
+```
+
+---
+
+## 4. 動作フロー
+
+1. ユーザーが隠しボタンからファイル選択
+2. `setting.csv` ならばフラグ`forceMode=true`
+3. 列数・行数・座席データ(`assignments`)を上書きし、UI操作を無効化
+4. `renderResult(true)` によってCSV通りの配置を一括表示（アニメなし）
+
+---
+
+## 5. まとめ
+
+- `setting.csv` 読み込みは特別扱いし、常にCSV内容を最優先します
+- UI操作をロックしつつ、CSVを反映した固定配置を即時表示
+- この拡張により、リモートで発行されたCSVデータをそのまま社内共有やプロジェクタ表示などに活用できます
+
+ぜひプロジェクトに取り入れてみてください。動作やコードに関してご不明点があればお知らせください。

@@ -1,0 +1,85 @@
+# Understanding Rust's LinkedHashMap
+
+Rustは高速で効率的なプログラミング言語として知られていますが、そのエコシステムは非常に多様です。今回は、デフォルトのHashMapとは異なる動作をする`LinkedHashMap`に焦点を当て、使い方やその内部動作、利点について解説します。
+
+## 1. LinkedHashMapの概要
+
+`LinkedHashMap`は名前の通り、連結リストのような仕組みとハッシュマップの特性を兼ね備えています。これにより、アイテムの挿入順序を保持しながら、効率的なアクセスが可能となります。
+
+- **挿入順序の維持**: アイテムが追加された順序が内部的に保持されるため、順序が重要なアプリケーションに向いています。
+- **ハッシュマップの性能**: 一般的なHashMapと同様、平均定数時のアクセスを提供します。
+
+## 2. 主なユースケース
+
+Rustにおける`HashMap`では順序が保証されないため、
+以下のようなシナリオでは`LinkedHashMap`が有効です:
+
+- キャッシュの実装：古いデータを順次削除する場合、挿入順を使って簡単に実装可能。
+- 順序を保証したデータストア：ログの保持や、ユーザが入力した順序を保存する場合。
+
+## 3. 基本的な使い方
+
+まず、`linked-hash-map`クレートをCargo.tomlに追加します:
+
+```toml
+[dependencies]
+linked-hash-map = "0.5"
+```
+
+次に、基本的なサンプルコードを見てみましょう:
+
+```rust
+use linked_hash_map::LinkedHashMap;
+
+fn main() {
+    // 空のLinkedHashMapを作成
+    let mut map = LinkedHashMap::new();
+
+    // キーと値のペアを挿入
+    map.insert("apple", 3);
+    map.insert("banana", 2);
+    map.insert("cherry", 5);
+
+    // 挿入順序に従って出力
+    for (key, value) in map.iter() {
+        println!("{}: {}", key, value);
+    }
+    
+    // 特定のキーの値を更新
+    if let Some(x) = map.get_mut("banana") {
+        *x += 10;
+    }
+
+    // キーを削除
+    map.remove("apple");
+
+    println!("Updated map:");
+    for (key, value) in map.iter() {
+        println!("{}: {}", key, value);
+    }
+}
+```
+
+このコードは、`LinkedHashMap`の基本的な操作である挿入、更新、削除、および順序に従ったイテレーションを示しています。
+
+## 4. 内部実装とパフォーマンスの詳細
+
+`LinkedHashMap`は通常、内部にダブルリンクリストを持ちます。これがあるため、
+要素間の順序が保持されます。一方で、HashMapの性能も引き継いでおり、
+平均するとO(1)のアクセス時間が実現できます。
+
+### メモリ管理と効率性
+
+- **メモリのオーバーヘッド**: 順序を保持するためのリンク情報があるため、通常のHashMapよりも若干メモリ消費が増える可能性があります。
+- **キャッシュシステムへの利用**: 挿入順が自然と保たれるため、LRUキャッシュの実装での利用が非常に便利です。
+
+## 5. まとめ
+
+Rustの`LinkedHashMap`は、順序の保持が求められるシナリオで非常に役立つツールです。標準のHashMapが提供する高速なアクセスと、順序保持による利便性の両方を兼ね備えており、多くのユースケースに適用可能です。
+
+### 情報源
+
+- [Rust公式ドキュメント](https://doc.rust-lang.org/)
+- [linked-hash-map GitHubリポジトリ](https://github.com/contain-rs/linked-hash-map)
+
+このように、`LinkedHashMap`に関する知識はRustで効率的かつ順序を意識したデータ操作を行う際の重要なツールとなります。

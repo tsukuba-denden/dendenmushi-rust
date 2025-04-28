@@ -1,0 +1,40 @@
+# Rustの始め方
+
+## 1. Rustのインストール
+Rustを始めるには、まず公式サイトからインストーラーをダウンロードします。以下のコマンドで簡単にインストールできます。
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+## 2. 環境設定
+インストール後、ターミナルで以下のコマンドを実行して環境変数を設定します。
+```bash
+eval "$(rustup init)"
+```
+
+## 3. プロジェクトの作成
+新しいプロジェクトを作成するには、次のコマンドを使用します。
+```bash
+cargo new my_project
+cd my_project
+```
+
+## 4. コードを書いてみよう
+`src/main.rs`ファイルを開き、以下のコードを追加してみましょう。
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+## 5. プログラムのビルドと実行
+プログラムをビルドし、実行するには次のコマンドを使います。
+```bash
+cargo run
+```
+
+## 6. 学習リソース
+- [Rust公式ドキュメント](https://doc.rust-lang.org/book/)
+- [Rust By Example](https://doc.rust-lang.org/rust-by-example/)
+
+これでRustの基本的な始め方がわかりました！ぜひ試してみてくださいね。
