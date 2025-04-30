@@ -10,3 +10,6 @@ Example for passing image to another model for generating pyplot code:
 ```
 利用例: browserツールでIntelサイトをスクレイピングし、記事をweb_deploy_toolで公開
 ツール: browser, web_deploy_tool, memory_tool
+Added web article on Rust + Tauri + Next.js game server management tool
+Created an article 'MongoDBのストレージエンジンにおけるデータ整合化技術' via web_deploy_tool summarizing storage engines, MVCC, journaling, checkpoints, transactions, replication, tuning.
+Deployed MongoDB Storage Engine Documentation via web_deploy_tool on <timestamp>

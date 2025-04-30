@@ -5,3 +5,4 @@ pub mod memory;
 pub mod text_len;
 pub mod web_deploy;
 pub mod image_captioner;
+pub mod browsing_worker;

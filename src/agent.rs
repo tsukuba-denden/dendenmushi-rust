@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::{Arc, RwLock}, u64};
 
-use call_agent::chat::{client::{OpenAIClient, OpenAIClientState}, prompt::{Message, MessageContext, MessageImage}};
+use call_agent::chat::{client::{OpenAIClient, OpenAIClientState, ToolMode}, prompt::{Message, MessageContext, MessageImage}};
 use log::debug;
 use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, DEEP_SEARCH_DEVELOPER_PROMPT, DEEP_SEARCH_GENERATE_PROMPT, MAX_USE_TOOL_COUNT};
 use regex::Regex;
@@ -82,6 +82,7 @@ impl ChannelState {
             name: Some(message.user_id.clone()),
         }]
     }
+
     pub async fn ask(&self, mut message: InputMessage) -> String {
         let user_prompt = ChannelState::prepare_user_prompt(&mut message, 0).await;
         let mut r_prompt_stream = self.prompt_stream.lock().await;
@@ -102,7 +103,7 @@ impl ChannelState {
         let mut used_tools = Vec::new();
 
         for _ in 0..*MAX_USE_TOOL_COUNT {
-            let res = match prompt_stream.generate_can_use_tool(None).await {
+            let res = match prompt_stream.generate_can_use_tool::<fn(&str, &serde_json::Value)>(None, None).await {
                 Ok(res) => {
                     res
                 },
@@ -179,82 +180,89 @@ impl ChannelState {
         }];
         prompt_stream.add(system_prompt).await;
 
-
+        // 使用したツールのトラッキング
         let mut used_tools = Vec::new();
 
-        for _ in 0..*MAX_USE_TOOL_COUNT {
-            // 応答を生成
-            let res = match prompt_stream.generate_can_use_tool(None).await {
-                Ok(res) => {
-                    res
-                },
-                Err(e) => {
-                    return format!("Err: response is none from ai - {:?}", e);
-                }
-            };
-            if res.has_tool_calls {
-                // 推論の経過を表示
-                let status_ms = format!(
-                    "-#  {}\n-# using {}...",
-                    res.content.unwrap_or_default(),
-                    res.tool_calls.as_ref().unwrap().iter()
-                        .map(|tool_call| tool_call.function.name.clone())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
-                let status_res = CreateMessage::new()
-                    .content(status_ms)
-                    .flags(MessageFlags::SUPPRESS_EMBEDS);
+        // 推論ストリームの生成
+        let mut reasoning_stream = prompt_stream.reasoning(None, &ToolMode::Auto).await.unwrap();
 
-                if let Err(e) = msg.channel_id.send_message(&ctx.http, status_res).await {
-                    debug!("Error sending message: {:?}", e);
-                }
-                
-                // 使用されたツールの情報を収集
-                res.tool_calls.unwrap().iter().for_each(|tool_call| {
-                    used_tools.push(tool_call.function.name.clone());
-                });
-                continue;
-            } else if res.has_content {
-                // ツールコールがない場合の処理
-                let tag = format!("\n-# model: {}", prompt_stream.client.model_config.unwrap().model);
-                let mut tool_count = HashMap::new();
-                for tool in used_tools {
-                    *tool_count.entry(tool).or_insert(0) += 1;
-                }
-                let used_tools_info = if !tool_count.is_empty() {
-                    let tools_info: Vec<String> = tool_count.iter().map(|(tool, count)| {
-                        if *count > 1 {
-                            format!("{} x{}", tool, count)
-                        } else {
-                            tool.clone()
-                        }
-                    }).collect();
-                    format!("\n-# tools: {}", tools_info.join(", "))
+        // 推論ループ
+        for i in 0..*MAX_USE_TOOL_COUNT + 1 {
+            // 終了できるなら終了
+            if reasoning_stream.can_finish() {
+                break;
+            }
+            
+            // ツールコールの表示
+            let show_tool_call: Vec<(String, serde_json::Value)> = reasoning_stream.show_tool_calls()
+                .into_iter()
+                .map(|(n,arg)| (n.to_string(), arg.clone()))
+                .collect();
+
+            for (tool_name, argument) in show_tool_call {
+                used_tools.push(tool_name.clone());
+                if let Some(explain) = argument.get("$explain") {
+                    let status_res = CreateMessage::new()
+                        .content(format!("-# {}...", explain.to_string()))
+                        .flags(MessageFlags::SUPPRESS_EMBEDS);
+    
+                    if let Err(e) = msg.channel_id.send_message(&ctx.http, status_res).await {
+                        debug!("Error sending message: {:?}", e);
+                    }
                 } else {
-                    "".to_string()
-                };
-                let differential_stream = prompt_stream.prompt.split_off(last_pos + 1 /* 先頭のシステムプロンプト消す */);
-                {
-                    let mut r_prompt_stream = self.prompt_stream.lock().await;
-                    r_prompt_stream.add(differential_stream.into()).await;
+                    let status_res = CreateMessage::new()
+                        .content(format!("-# using {}...", tool_name))
+                        .flags(MessageFlags::SUPPRESS_EMBEDS);
+    
+                    if let Err(e) = msg.channel_id.send_message(&ctx.http, status_res).await {
+                        debug!("Error sending message: {:?}", e);
+                    }
                 }
-                return res.content.unwrap().replace("\\n", "\n") + &tag + &used_tools_info;
+            }
+            
+            // 推論の上限回数を超えた場合はツールモードを無効化
+            let mode = if i == *MAX_USE_TOOL_COUNT {
+                ToolMode::Disable
             } else {
-                return "Err: response is none from ai".to_string();
+                ToolMode::Auto
+            };
+            // 推論の実行
+            match reasoning_stream.proceed(&mode).await {
+                Err(e) => {
+                                return format!("Err: failed reasoning - {:?}", e);
+                            }
+                Ok(_) => {},
             }
         }
-        let res = match prompt_stream.generate(None).await {
-            Ok(res) => res,
-            Err(_) => {
-                return "Err: response is none from ai".to_string();
-            }
-        };
-        if res.has_content {
-            return res.content.unwrap().replace("\\n", "\n");
+
+        // 推論結果の取得
+        let content = reasoning_stream.content.unwrap_or("Err: response is none from ai".to_string());
+
+        // ツールコールの統計収集
+        let model_info = format!("\n-# model: {}", prompt_stream.client.model_config.unwrap().model);
+        let mut tool_count = HashMap::new();
+        for tool in used_tools {
+            *tool_count.entry(tool).or_insert(0) += 1;
+        }
+        let used_tools_info = if !tool_count.is_empty() {
+            let tools_info: Vec<String> = tool_count.iter().map(|(tool, count)| {
+                if *count > 1 {
+                    format!("{} x{}", tool, count)
+                } else {
+                    tool.clone()
+                }
+            }).collect();
+            format!("\n-# tools: {}", tools_info.join(", "))
         } else {
-            return "Err: response is none from ai".to_string();
+            "".to_string()
+        };
+        // プロンプトストリームに分岐した分部をマージ
+        let differential_stream = prompt_stream.prompt.split_off(last_pos + 1 /* 先頭のシステムプロンプト消す */);
+        {
+            let mut r_prompt_stream = self.prompt_stream.lock().await;
+            r_prompt_stream.add(differential_stream.into()).await;
         }
+        return content.replace("\\n", "\n") + &model_info + &used_tools_info;
     }
 
     pub async fn add_message(&self, mut message: InputMessage) {

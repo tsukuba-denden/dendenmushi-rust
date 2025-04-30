@@ -235,7 +235,11 @@ impl Tool for WebDeploy {
                 "content": {
                     "type": "string",
                     "description": "Content of the article",
-                }
+                },
+                "$explain": {
+                    "type": "string",
+                    "description": "A brief explanation of what you are doing with this tool."
+                },
             },
             "required": ["action", "key"],
             "if": {

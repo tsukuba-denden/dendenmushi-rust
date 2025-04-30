@@ -225,7 +225,11 @@ Use 'add' to create or update an entry, 'push' to append to an existing entry, '
                 "value": {
                     "type": "string",
                     "description": "The value to store (required for 'add' and 'push' actions)."
-                }
+                },
+                "$explain": {
+                    "type": "string",
+                    "description": "A brief explanation of what you are doing with this tool."
+                },
             },
             "required": ["action"]
         })

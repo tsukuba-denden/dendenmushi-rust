@@ -529,8 +529,11 @@ dependencies = [
 
 [[package]]
 name = "call-agent"
-version = "1.2.3"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "facb2ea8e05c732784e193ccaf61b86f275cbcdce12e3744e20f4d278636df78"
 dependencies = [
+ "log",
  "reqwest 0.12.15",
  "serde",
  "serde_json",

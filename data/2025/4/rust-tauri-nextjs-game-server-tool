@@ -1,0 +1,100 @@
+# Rust + Tauri ＋ Next.js/TypeScriptで作るゲームサーバー管理ツール  
+
+## 概要
+このドキュメントでは、フロントエンドにNext.js/TypeScript、デスクトップUIにTauri、バックエンドのシステム操作をRustで実装するオープンソースのゲームサーバー管理ツールの設計・開発手順を解説します。読者は基本的なWeb開発（React/Next.js）、Rust、Tauriの知識があることを想定しています。
+
+---
+
+## 目次
+1. 目標・要件定義
+2. 全体アーキテクチャ
+3. プロジェクト構成
+4. フロントエンド（Next.js/TypeScript）
+5. デスクトップUI（Tauri）
+6. バックエンド（Rust）
+7. Docker／サーバー分離
+8. CI/CDパイプライン
+9. セキュリティと権限管理
+10. デプロイとメンテナンス
+
+---
+
+## 1. 目標・要件定義
+- ユーザーがGUI・ブラウザ双方でゲームサーバーの起動・停止・設定を管理できる
+- 複数のサーバーをコンテナ（Docker）で分離
+- マルチユーザー対応・権限設定
+- ログ・統計情報の可視化
+- クロスプラットフォーム対応（Windows/macOS/Linux）
+
+## 2. 全体アーキテクチャ
+
+```text
+[ Next.js (Web) ] <--> [ Tauri Frontend ] <--> [ Rust Backend ] <--> [ Docker Engine ]
+```  
+- **Next.js**: Web UI／APIクライアント  
+- **Tauri**: デスクトップラッパー・ネイティブAPI呼び出し  
+- **Rust Backend**: サーバー操作・Docker制御・認証  
+- **Docker Engine**: ゲームサーバーコンテナをホスト  
+
+## 3. プロジェクト構成
+
+```
+root/
+├─ web/               # Next.js/TS
+├─ tauri/             # Tauriプロジェクト
+│   └─ src-tauri/     # Rustバイナリ
+└─ shared/            # 型定義・ユーティリティ
+```
+
+## 4. フロントエンド（Next.js/TypeScript）
+
+1. `create-next-app --typescript`
+2. APIクライアント
+   - `/api/servers` で一覧取得
+   - `/api/servers/:id/start/stop` などエンドポイント呼び出し
+3. UIコンポーネント
+   - サーバー一覧テーブル
+   - モーダルで設定／権限管理
+
+## 5. デスクトップUI（Tauri）
+
+1. `cargo create-tauri-app` でセットアップ  
+2. Next.jsをバンドル（`tauri.conf.json`でdist設定）  
+3. `invoke`/`listen`でRust関数呼び出し  
+
+## 6. バックエンド（Rust）
+
+- `warp` or `axum` でHTTP API
+- `bollard` crateでDocker操作
+- 認証：JWT or OAuth2
+- 設定ファイル：`serde_json`+`ron`
+
+### 例: Dockerコンテナ起動
+```rust
+use bollard::Docker;
+async fn start_server(id: &str) -> Result<(), bollard::errors::Error> {
+  let docker = Docker::connect_with_local_defaults()?;
+  docker.start_container(id, None::<StartContainerOptions<String>>).await?;
+  Ok(())
+}
+```  
+
+## 7. Docker／サーバー分離
+- 各ゲームサーバーをDockerコンテナで管理  
+- ボリュームマウントでデータ永続化  
+
+## 8. CI/CDパイプライン
+- GitHub ActionsでRustビルド＋Next.jsビルド  
+- Tauriバイナリのクロスコンパイル  
+
+## 9. セキュリティと権限管理
+- API認証/認可  
+- HTTPS/TLS  
+
+## 10. デプロイとメンテナンス
+- Docker Compose or Kubernetes  
+- 自動バックアップ・監視設定
+
+---
+
+以上が基本設計です。実装サンプルはリポジトリにまとめていきます。

@@ -4,7 +4,7 @@ use dashmap::DashMap;
 mod agent;
 
 use call_agent::chat::client::{ModelConfig, OpenAIClient};
-use observer::{prefix::{ADMIN_USERS, ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL, ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME, RATE_CP, SEC_PER_RATE}, tools::{self, get_time::GetTime, image_captioner::ImageCaptionerTool, web_deploy::WebDeploy, web_scraper::Browser}};
+use observer::{prefix::{ADMIN_USERS, ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL, ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME, RATE_CP, SEC_PER_RATE}, tools::{self, browsing_worker::BrowsingWorker, get_time::GetTime, image_captioner::ImageCaptionerTool, web_deploy::WebDeploy, web_scraper::Browser}};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncBufReadExt;
 use tools::memory::MemoryTool;
@@ -786,6 +786,27 @@ async fn main() {
             })
         ));
     }
+    base_client.def_tool(Arc::new(
+        BrowsingWorker::new({
+            let mut c = OpenAIClient::new(
+                *MAIN_MODEL_ENDPOINT,
+                Some(*MAIN_MODEL_API_KEY)
+            );
+            c.set_model_config(&ModelConfig {
+                model: "gpt-4.1-nano".to_string(),
+                model_name: Some("browsing_worker".to_string()),
+                parallel_tool_calls: None,
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: None,
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+            });
+            c
+        })
+        )
+    );
     base_client.set_model_config(&conf);
     let base_client = Arc::new(base_client);
 

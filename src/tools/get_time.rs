@@ -113,6 +113,10 @@ impl Tool for GetTime {
                     "description": "ISO 3166-1 alpha-2 country code (e.g., 'US', 'JP', 'FR')"
                 }
             },
+            "$explain": {
+                "type": "string",
+                "description": "A brief explanation of what you are doing with this tool."
+            },
             "required": ["country_code"]
         })
     }

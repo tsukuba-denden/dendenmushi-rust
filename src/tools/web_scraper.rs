@@ -298,9 +298,14 @@ impl Browser {
         page.wait_for_selector_builder(selector_str).wait_for_selector().await.map_err(|_| ScraperError::TimeoutError)?;
         let elements = page.eval(
             &format!("Array.from(document.querySelectorAll('{}')).map(e => ({{\
-                text: e.innerText || '',
-                href: e.getAttribute('href') || '',
-                src: e.getAttribute('src') || ''
+                tag: e.tagName.toLowerCase(),\
+                text: e.tagName.toLowerCase()==='img'\
+                    ? (e.getAttribute('alt')||e.getAttribute('title')||'')\
+                    : (e.innerText||''),\
+                href: e.getAttribute('href')||'',\
+                src: e.getAttribute('src')||'',\
+                alt: e.getAttribute('alt')||'',\
+                title: e.getAttribute('title')||''\
             }}))", selector_str)
         ).await.map_err(|_| ScraperError::ParseError)?;
 
@@ -402,8 +407,8 @@ For searching, use Bing."
                 },
                 "mode": {
                     "type": "string",
-                    "enum": ["reqwest", "playwright"],
-                    "description": "Scraping method: 'reqwest' (fast) or 'playwright' (e.g., 'reqwest', if use bing = 'playwright')."
+                    "enum": ["playwright"],
+                    "description": "Scraping method: 'playwright' (e.g., 'playwright', if use bing = 'playwright')."
                 },
                 "seek_pos": {
                     "type": "integer",
@@ -411,8 +416,12 @@ For searching, use Bing."
                 },
                 "max_length": {
                     "type": "integer",
-                    "description": "Maximum length of extracted content (e.g., 3999, 7999, 200000[ALL])."
-                }
+                    "description": "Maximum length of extracted content (e.g., 3999, 7999, (200000[ALL]))."
+                },
+                "$explain": {
+                    "type": "string",
+                    "description": "A brief explanation of what you are doing with this tool."
+                },
             },
             "required": ["url", "selector", "seek_pos", "max_length"]
         })

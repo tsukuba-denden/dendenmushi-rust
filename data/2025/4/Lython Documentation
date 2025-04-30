@@ -1,0 +1,99 @@
+# Lython Documentation
+
+## Overview
+Lython is an experimental Python compiler toolchain built on LLVM. Formerly known as **pyc**, it transpiles Python source code (via AST) into LLVM IR, then compiles to native machine code with Clang/llc. It aims to provide performance close to C/C++ while maintaining CPython object compatibility.
+
+Key goals:
+- Transform Python AST into optimized LLVM IR
+- Utilize Clang/llc for native binary generation
+- Support CPython-compatible object model and runtime
+- Implement simple static-type-like checks during compilation
+- Manage memory via reference counting (CPython style) built atop Boehm GC
+
+## Quick Benchmark
+```
+Runtime     | Time      | Result
+------------|-----------|--------
+LLVM(O1)    | 15.64ms   | 9,227,465
+Lython      | 26.75ms   | 9,227,465  (x1.00)
+C(O0)       | 33.93ms
+Node.js     | 93.08ms
+Python      | 623.53ms
+``` 
+Lython achieves ~23× speedup over CPython (no GIL) on Fibonacci benchmark.
+
+## Repository Structure
+```
+├── bench.py                 # Benchmark runner
+├── benchmark/               # Sample codes in C, JS, LLVM IR, Python
+├── helloworld.ll            # Example: Hello world in LLVM IR
+├── src/lython/              # Compiler sources
+│   ├── codegen/ir/          # LLVM IR builder APIs
+│   └── codegen/visitors/    # AST Node visitors
+│   └── compiler/            # IR-to-binary logic (ll2bin)
+├── src/lythonc/             # CLI entrypoint (__main__.py)
+├── runtime/                 # CPython-like runtime implementation
+│   └── builtin/             # Built-in functions & object definitions
+├── samples/                 # IR samples generated from other languages
+├── Makefile                 # Builds runtime (runtime.o)
+├── source.py                # Sample Python code
+├── source.py.ll             # Generated LLVM IR
+├── source.py.s              # Generated assembly
+├── pyproject.toml           # Poetry/PEP 621 metadata
+└── uv.lock                  # Dependency lock file
+```
+
+## Installation
+Requires Python 3.12+, LLVM/Clang, and **uv** as the package manager.
+
+1. Install `uv`:
+   - macOS/Linux:
+     ```bash
+eval "$(curl -LsSf https://astral.sh/uv/install.sh)"
+```   
+   - Windows:
+     ```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```  
+2. Sync dependencies:
+   ```bash
+uv sync
+```  
+3. Build runtime:
+   ```bash
+make
+```  
+4. Verify `clang --version` and `llc --version` are available.
+
+## Usage
+
+### Emit LLVM IR
+```bash
+python -m lythonc -emit-llvm source.py
+```  
+Produces `source.py.ll`.
+
+### Generate Executable
+```bash
+python -m lythonc -emit-binary source.py
+```  
+Generates a native binary (via `clang` or `llc`).
+
+## Architecture
+1. **Parser & AST**: Uses CPython’s AST module to parse `.py` files.
+2. **AST Visitors**: Each AST node is visited to produce corresponding LLVM IR constructs.
+3. **Type Inference**: A minimal static analysis assigns types where possible to optimize IR.
+4. **IR Generation**: IR builder modules assemble IR with functions, modules, globals.
+5. **Runtime Linking**: Links with a minimal CPython-like runtime (object model, GC, builtins).
+6. **Compilation**: Invokes `clang`/`llc` to compile IR into object files and link into an executable.
+
+## Runtime Implementation
+- Builtins implemented in C under `runtime/builtin` (functions.c & objects/)
+- CPython-like reference-count memory management layered on Boehm GC
+- Object header, type objects, method resolution follow CPython conventions.
+
+## Contributing
+Currently, this is an experimental project; contributions are not accepted via pull requests. Feel free to open issues or discuss design ideas.
+
+---
+*This document is auto-generated based on the [Lython README](https://github.com/t3tra-dev/lython).*

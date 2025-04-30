@@ -117,7 +117,7 @@ impl Tool for ImageCaptionerTool {
     }
 
     fn def_description(&self) -> &str {
-        "Generate a caption for an image. Can use natural language query to get the caption of the image."
+        "Generate a caption for an image. Can use natural language query to get the caption of the image. This can only analyze information to the extent of a summary of the image."
     }
 
     fn def_parameters(&self) -> Value {
@@ -131,7 +131,11 @@ impl Tool for ImageCaptionerTool {
                 "query": {
                     "type": "string",
                     "description": "Input natural language query to get the caption of the image.ex 'write out all the information in the image.'"
-                }
+                },
+                "$explain": {
+                    "type": "string",
+                    "description": "A brief explanation of what you are doing with this tool."
+                },
             },
             "required": ["url", "query"]
         })
