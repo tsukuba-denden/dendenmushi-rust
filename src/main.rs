@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 use agent::{ChannelState, InputMessage};
 use dashmap::DashMap;
 mod agent;
@@ -6,10 +6,9 @@ mod agent;
 use call_agent::chat::client::{ModelConfig, OpenAIClient};
 use observer::{prefix::{ADMIN_USERS, ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL, ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME, RATE_CP, SEC_PER_RATE}, tools::{self, browsing_worker::BrowsingWorker, get_time::GetTime, image_captioner::ImageCaptionerTool, web_deploy::WebDeploy, web_scraper::Browser}};
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncBufReadExt;
 use tools::memory::MemoryTool;
 
-use serenity::{all::{CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EditInteractionResponse}, async_trait, futures::{self}};
+use serenity::{all::{CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage}, async_trait, futures::{self}};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
@@ -501,73 +500,6 @@ impl EventHandler for Handler {
                     }
                 }
 
-                "ask" => {
-                    // 考え中
-                    let defer_response = CreateInteractionResponse::Defer(
-                        CreateInteractionResponseMessage::new()
-                    );
-                    if let Err(why) = command.create_response(&ctx.http, defer_response).await {
-                        error!("Failed to send Defer response - {:?}", why);
-                        return;
-                    }
-
-                    let question = command.data.options[0].value.as_str().unwrap();
-                    let state = if let Some(existing) = self.channels.get(&command.channel_id) {
-                        Arc::clone(&existing)
-                    } else {
-                        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
-                        self.channels.insert(command.channel_id, new_state.clone());
-                        new_state
-                    };
-
-                    let message = InputMessage {
-                        content: question.to_string(),
-                        name: command.user.name.clone(),
-                        message_id: "".to_string(),
-                        reply_msg: None,
-                        user_id: command.user.id.to_string(),
-                        attached_files: Vec::new(),
-                    };
-
-                    let answer_text = state.ask(message).await;
-
-                    // 改行単位で分割し、2000文字を超えないようにする
-                    let mut chunks = Vec::new();
-                    let mut current_chunk = String::new();
-
-                    for line in answer_text.lines() {
-                        if current_chunk.len() + line.len() + 1 > 2000 {
-                            chunks.push(current_chunk);
-                            current_chunk = String::new();
-                        }
-                        if !current_chunk.is_empty() {
-                            current_chunk.push('\n');
-                        }
-                        current_chunk.push_str(line);
-                    }
-                    if !current_chunk.is_empty() {
-                        chunks.push(current_chunk);
-                    }
-
-                    // 最初のメッセージは `edit_response`
-                    if let Some(first_chunk) = chunks.get(0) {
-                        let response = EditInteractionResponse::new().content(first_chunk);
-                        if let Err(why) = command.edit_response(&ctx.http, response).await {
-                            error!("Failed to edit response - {:?}", why);
-                        }
-                    }
-
-                    // 残りのメッセージは `followup_message`
-                    for chunk in &chunks[1..] {
-                        if let Err(why) = command
-                            .create_followup(&ctx.http, CreateInteractionResponseFollowup::new().content(chunk).flags(MessageFlags::SUPPRESS_EMBEDS))
-                            .await
-                        {
-                            error!("Failed to send follow-up message - {:?}", why);
-                        }
-                    }
-                }
-
                 "collect_history" => {
                     let entry_num = command.data.options[0].value.as_i64().unwrap_or(32) as usize;
                     let state = if let Some(existing) = self.channels.get(&command.channel_id) {
@@ -641,30 +573,6 @@ impl EventHandler for Handler {
     /// Bot が起動したときの処理
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
-
-        let new_state = Arc::new(ChannelState::new(&self.base_client).await);
-        tokio::spawn(async move {
-            let stdin = tokio::io::stdin();
-            let mut reader = tokio::io::BufReader::new(stdin).lines();
-
-            while let Ok(Some(line)) = reader.next_line().await {
-                if line == "exit" {
-                    break;
-                }
-
-                let message = InputMessage {
-                    content: line,
-                    name: "root".to_string(),
-                    message_id: "Null".to_string(),
-                    reply_msg: None,
-                    user_id: "Null".to_string(),
-                    attached_files: Vec::new(),
-                };
-
-                let rs = new_state.ask(message).await;
-                info!("AI:\n{}\n\n", rs);
-            }
-        });
 
         // グローバルコマンドを登録
         Command::set_global_commands(&ctx.http, vec![

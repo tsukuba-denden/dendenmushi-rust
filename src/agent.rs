@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::{Arc, RwLock}, u64};
+use std::{collections::HashMap, sync::Arc, u64};
 
 use call_agent::chat::{client::{OpenAIClient, OpenAIClientState, ToolMode}, prompt::{Message, MessageContext, MessageImage}};
 use log::debug;
-use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, DEEP_SEARCH_DEVELOPER_PROMPT, DEEP_SEARCH_GENERATE_PROMPT, MAX_USE_TOOL_COUNT};
+use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT};
 use regex::Regex;
 use serenity::all::{Context, CreateMessage, MessageFlags};
 use tokio::sync::Mutex;
@@ -36,16 +36,17 @@ impl ChannelState {
     }
 
     async fn prepare_user_prompt(message: &mut InputMessage, viw_image_detail: u8) -> Vec<Message> {
+        // スポイラーを含むメッセージの処理
         let re = Regex::new(r"(\|\|.*?\|\|)").unwrap();
         message.content = re.replace_all(&message.content, "||<spoiler_msg>||").to_string();
 
         // !hidetail が含まれていれば強制的に high detail
         let mut detail_flag = viw_image_detail;
-        if message.content.contains("!hiimgv") {
-            println!("hiimgv found in message content");
+        if message.content.contains("!hidetail") {
+            println!("hidetail found in message content");
             detail_flag = 255;
             // 末尾／文中のフラグ文字列を削除
-            message.content = message.content.replace("!hiimgv", "");
+            message.content = message.content.replace("!hidetail", "");
         }
 
         let meta = format!(
@@ -83,80 +84,6 @@ impl ChannelState {
         }]
     }
 
-    pub async fn ask(&self, mut message: InputMessage) -> String {
-        let user_prompt = ChannelState::prepare_user_prompt(&mut message, 0).await;
-        let mut r_prompt_stream = self.prompt_stream.lock().await;
-        r_prompt_stream.add(user_prompt).await;
-        let mut prompt_stream = r_prompt_stream.clone();
-        drop(r_prompt_stream); // 先にロックを解除t_stream.clone();
-        prompt_stream.set_entry_limit(u64::MAX).await;
-        let last_pos = prompt_stream.prompt.len();
-
-        debug!("prompt_stream - {:#?}", prompt_stream.prompt);
-        let system_prompt = vec![Message::Developer {
-            content: ASK_DEVELOPER_PROMPT.to_string(),
-            name: Some(ASSISTANT_NAME.to_string()),
-        }];
-
-        prompt_stream.add(system_prompt).await;
-
-        let mut used_tools = Vec::new();
-
-        for _ in 0..*MAX_USE_TOOL_COUNT {
-            let res = match prompt_stream.generate_can_use_tool::<fn(&str, &serde_json::Value)>(None, None).await {
-                Ok(res) => {
-                    res
-                },
-                Err(e) => {
-                    return format!("Err: response is none from ai - {:?}", e);
-                }
-            };
-            if res.has_tool_calls {
-                res.tool_calls.unwrap().iter().for_each(|tool_call| {
-                    used_tools.push(tool_call.function.name.clone());
-                });
-                continue;
-            } else if res.has_content {
-                let tag = format!("\n-# model: {}", prompt_stream.client.model_config.unwrap().model);
-                let mut tool_count = HashMap::new();
-                for tool in used_tools {
-                    *tool_count.entry(tool).or_insert(0) += 1;
-                }
-                let used_tools_info = if !tool_count.is_empty() {
-                    let tools_info: Vec<String> = tool_count.iter().map(|(tool, count)| {
-                        if *count > 1 {
-                            format!("{} x{}", tool, count)
-                        } else {
-                            tool.clone()
-                        }
-                    }).collect();
-                    format!("\n-# tools: {}", tools_info.join(", "))
-                } else {
-                    "".to_string()
-                };
-                let differential_stream = prompt_stream.prompt.split_off(last_pos + 1 /* 先頭のシステムプロンプト消す */);
-                {
-                    let mut r_prompt_stream = self.prompt_stream.lock().await;
-                    r_prompt_stream.add(differential_stream.into()).await;
-                }
-                return res.content.unwrap().replace("\\n", "\n") + &tag + &used_tools_info;
-            } else {
-                return "Err: response is none from ai".to_string();
-            }
-        }
-        let res = match prompt_stream.generate(None).await {
-            Ok(res) => res,
-            Err(_) => {
-                return "Err: response is none from ai".to_string();
-            }
-        };
-        if res.has_content {
-            return res.content.unwrap().replace("\\n", "\n");
-        } else {
-            return "Err: response is none from ai".to_string();
-        }
-    }
-
     pub async fn reasoning(
         &self, 
         ctx: &Context,
@@ -184,7 +111,10 @@ impl ChannelState {
         let mut used_tools = Vec::new();
 
         // 推論ストリームの生成
-        let mut reasoning_stream = prompt_stream.reasoning(None, &ToolMode::Auto).await.unwrap();
+        let mut reasoning_stream = match prompt_stream.reasoning(None, &ToolMode::Auto).await {
+            Ok(stream) => stream,
+            Err(e) => return format!("Err: failed reasoning - {:?}", e),
+        };
 
         // 推論ループ
         for i in 0..*MAX_USE_TOOL_COUNT + 1 {

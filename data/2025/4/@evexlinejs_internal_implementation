@@ -1,0 +1,82 @@
+# @evex/linejs 内部実装解説
+
+LINEJS ライブラリの内部アーキテクチャをフォーカスして解説します。初めて実装を見る方にも理解しやすいよう、モジュールごとに設計意図と内部処理の流れをまとめました。
+
+## 1. アーキテクチャ概観
+
+- モジュール構成
+  - `@evex/linejs`（Client）
+  - `@evex/linejs/base`（HTTP/Thrift 呼び出し基盤）
+  - `@evex/linejs/thrift`（Thrift シリアライズ/デシリアライズ）
+  - `@evex/linejs/storage`（メッセージキャッシュ/永続化）
+
+各モジュールは依存を最小化し、疎結合を実現。依存関係は以下の通りです。
+```
+Client → base → thrift
+      ↘ storage ↗
+```
+
+
+## 2. Client クラスの内部フロー
+
+1. 初期化
+   - `authToken` の検証
+   - WebSocket や HTTP 長輪講の接続設定
+2. イベントループ
+   - WebSocket 受信 → `dispatcher` へ転送
+   - メッセージを解析し、登録されたイベントハンドラを呼び出す
+3. 再接続ロジック
+   - 接続切断時は指数バックオフで再試行
+
+```ts
+async connect() {
+  await this.base.init();
+  this.ws = new WebSocket(url);
+  this.ws.onmessage = this.handleMessage;
+}
+``` 
+
+
+## 3. Thrift シリアライズ/デシリアライズ層
+
+- メッセージ構造体を定義した `.thrift` ファイルを元に自動生成
+- `serialize()` で JS オブジェクト→バイト列
+- `deserialize()` でバイト列→JS オブジェクト
+- 大量メッセージ時はバッファプールを再利用し GC を抑制
+
+
+## 4. base API 呼び出し基盤
+
+- HTTP/2 や gRPC を選択可能
+- リクエスト生成
+  - Thrift バイナリをペイロードにセット
+  - 必要ヘッダ（X-Line-Access）を追加
+- レスポンス処理
+  - ステータスコード判定 → `deserialize`
+  - エラー時はリトライ／指数バックオフ
+
+
+## 5. ストレージ層の実装
+
+- メッセージキャッシュ管理
+  - メモリキャッシュ（LRU）で即時アクセス
+  - 永続化：JSON ファイル or SQLite
+- キャッシュ切り替え
+  - 環境変数 `LINEJS_STORAGE_BACKEND` で指定
+
+
+## 6. 拡張ポイントとプラグイン機構
+
+- 中間層ミドルウェア
+  - `client.use(middlewareFn)` でフック登録
+- 独自機能追加例
+  ```ts
+  client.use(async (ctx, next) => {
+    console.log('送信前:', ctx.payload);
+    await next();
+  });
+  ```
+
+
+---
+参考: https://linejs.evex.land/docs 内部リポジトリ実装

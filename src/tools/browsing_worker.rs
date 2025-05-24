@@ -1,9 +1,6 @@
-use std::{collections::VecDeque, io::Cursor, sync::Arc};
+use std::sync::Arc;
 
-use call_agent::chat::{client::{OpenAIClient, ToolMode}, function::Tool, prompt::{Message, MessageContext, MessageImage}};
-use image::{codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, GenericImageView, ImageReader, RgbaImage};
-use regex::Regex;
-use reqwest::Client;
+use call_agent::chat::{client::{OpenAIClient, ToolMode}, function::Tool, prompt::{Message, MessageContext}};
 use serde_json::Value;
 use tokio::runtime::Runtime;
 
@@ -27,7 +24,7 @@ impl Tool for BrowsingWorker {
     }
 
     fn def_description(&self) -> &str {
-        "I will obtain a summary of the web page. If you want to obtain the original, please use a browser."
+        "Get a summary of the web page. If you want to obtain the original page without summarization, please use your browser. You can also provide instructions in natural language along with the URL. It can generate a summary of the entire page very quickly."
     }
 
     fn def_parameters(&self) -> Value {
@@ -36,7 +33,7 @@ impl Tool for BrowsingWorker {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "URL eg. https://*.*/*/..."
+                    "description": "URL and some natural language query ex.Gather links to the materials located at https://*.*/*/..."
                 },
                 "$explain": {
                     "type": "string",

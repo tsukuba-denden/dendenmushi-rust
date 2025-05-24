@@ -13,3 +13,5 @@ Example for passing image to another model for generating pyplot code:
 Added web article on Rust + Tauri + Next.js game server management tool
 Created an article 'MongoDBのストレージエンジンにおけるデータ整合化技術' via web_deploy_tool summarizing storage engines, MVCC, journaling, checkpoints, transactions, replication, tuning.
 Deployed MongoDB Storage Engine Documentation via web_deploy_tool on <timestamp>
+Deployed Observer Rust documentation via web_deploy_tool on <timestamp>
+Deployed Observer-Rust-Internal documentation via web_deploy_tool

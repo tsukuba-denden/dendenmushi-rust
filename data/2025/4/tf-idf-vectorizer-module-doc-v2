@@ -1,0 +1,82 @@
+# tf-idf-vectorizer モジュールドキュメント v2
+
+Rust製のTF-IDFベクトライザー「tf-idf-vectorizer」リポジトリのモジュール構成と詳細APIリファレンスをまとめました。
+約1〜3分で読めるように設計しています。
+
+## 目次
+1. src/lib.rs
+2. src/token_frequency.rs
+3. src/utils.rs
+4. src/index.rs
+5. src/main.rs
+6. テスト・リソース
+
+---
+
+## 1. lib.rs
+### 概要
+- クレートの公開エントリーポイント。
+- オプション設定から文書追加、TF-IDF計算まで一貫したAPIを提供。
+
+### 主な型・関数
+- `struct VectorizerOptions`
+  - stop_words: Option<HashSet<String>> — 除外する単語集合。
+  - min_df: usize — 出現文書数の下限。
+  - max_df: usize — 出現文書数の上限。
+- `struct TFIDFVectorizer`
+  - new(opts: VectorizerOptions) -> Self
+  - add_documents(&mut self, docs: Vec<String>)
+  - fit(&mut self)
+  - transform(&self, docs: &[String]) -> Vec<Vec<(String, f64)>>
+  - fit_transform(&mut self, docs: Vec<String>) -> Vec<Vec<(String, f64)>>
+
+## 2. token_frequency.rs
+### 概要
+- ドキュメントごとの単語出現回数集計と、TF・IDF計算ロジック。
+
+### 主な型・関数
+- `struct TokenFrequency`
+  - new() -> Self
+  - accumulate(&mut self, doc: &str)
+  - tf(&self, token: &str) -> f64
+  - idf(&self, token: &str, total_docs: usize) -> f64
+  - tokens(&self) -> impl Iterator<Item = &String>
+
+## 3. utils.rs
+### 概要
+- テキスト前処理ユーティリティ（トークナイズ・正規化・フィルタリング）。
+
+### 主な関数
+- `fn tokenize(text: &str) -> Vec<String>` — 単語分割。
+- `fn normalize(token: &str) -> String` — 小文字化など正規化。
+- `fn filter_tokens(tokens: Vec<String>, stop_words: &Option<HashSet<String>>, min_df: usize, max_df: usize) -> Vec<String>` — DF閾値とストップワードでフィルタ。
+
+## 4. index.rs
+### 概要
+- コレクション全体の文書管理と検索機能。
+
+### 主な型・関数
+- `struct DocumentIndex`
+  - new(opts: VectorizerOptions) -> Self
+  - insert(&mut self, doc_id: usize, content: &str)
+  - get_tfidf(&self, doc_id: usize) -> Vec<(String, f64)>
+  - query(&self, text: &str) -> Vec<(usize, f64)> — 類似度計算によるスコアリング。
+
+## 5. main.rs
+### 概要
+- CLIバイナリ。`clap`で引数パース。
+
+### サブコマンド
+- `build-index` — フォルダからインデックス構築。
+- `vectorize` — 入力テキストをTF-IDF化して表示。
+
+## 6. テスト・リソース
+- test_data_set/: サンプル文書。
+- img/: ドキュメント用図解。
+- Cargo.toml: Rayonなど依存定義。
+
+---
+
+情報源: GitHubリポジトリ (https://github.com/371tti/tf-idf-vectorizer)
+
+*この記事は約2分で読めます。*

@@ -2,7 +2,6 @@ use std::{collections::VecDeque, io::Cursor};
 
 use call_agent::chat::{client::OpenAIClient, function::Tool, prompt::{Message, MessageContext, MessageImage}};
 use image::{codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, GenericImageView, ImageReader, RgbaImage};
-use regex::Regex;
 use reqwest::Client;
 use serde_json::Value;
 use tokio::runtime::Runtime;

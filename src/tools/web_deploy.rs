@@ -21,22 +21,6 @@ pub struct WebDeploy {
     file_map: Arc<RwLock<HashMap<String, PathBuf>>> // 記事キー → ファイルパス
 }
 
-async fn get_article(data: web::Data<Arc<RwLock<HashMap<String, PathBuf>>>>, key: web::Path<String>) -> impl Responder {
-    let file_map = data.get_ref();
-    let key_str = key.into_inner();
-    let file_map_read = file_map.read().await;
-    if let Some(path) = file_map_read.get(&key_str) {
-        match tokio::fs::read_to_string(path).await {
-            Ok(content) => HttpResponse::Ok().body(content),
-            Err(e) => {
-                debug!("Error loading article {}: {}", key_str, e);
-                HttpResponse::InternalServerError().body("Failed loading article")
-            },
-        }
-    } else {
-        HttpResponse::NotFound().body("Article not found")
-    }
-}
 async fn list_articles_by_month(
     path: web::Path<(String, String)>,
     query: web::Query<HashMap<String, String>>,

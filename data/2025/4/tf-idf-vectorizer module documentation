@@ -1,0 +1,59 @@
+# tf-idf-vectorizer モジュールドキュメント
+
+Rust製の高速TF-IDFベクトライザー「tf-idf-vectorizer」リポジトリに含まれる主なモジュールごとの概要とAPIリファレンスをまとめました。
+
+---
+
+## 1. `src/lib.rs`
+- **役割**: クレートのエントリーポイント。公開APIを定義。
+- **主な公開構造体・関数**:
+  - `TFIDFVectorizer`:
+    - new(opts: VectorizerOptions) -> Self
+    - add_documents(&mut self, docs: Vec<String>)
+    - fit(&mut self)
+    - transform(&self, docs: &[String]) -> Vec<Vec<(String, f64)>>
+    - fit_transform(&mut self, docs: Vec<String>) -> Vec<Vec<(String, f64)>>
+  - `VectorizerOptions`:
+    - stop_words: Option<HashSet<String>>
+    - min_df: usize
+    - max_df: usize
+
+## 2. `src/token_frequency.rs`
+- **役割**: 単語ごとの出現頻度を集計し、TF/IDFを計算。
+- **主要構造体**:
+  - `TokenFrequency`:
+    - new() -> Self
+    - accumulate(&mut self, doc: &str)
+    - tf(&self, token: &str) -> f64
+    - idf(&self, token: &str, total_docs: usize) -> f64
+    - tokens(&self) -> impl Iterator<Item=&String>
+
+## 3. `src/utils.rs`
+- **役割**: 前処理ユーティリティ関数群。トークン化や正規化を担当。
+- **主な関数**:
+  - `tokenize(text: &str) -> Vec<String>`
+  - `normalize(token: &str) -> String`
+  - `filter_tokens(tokens: Vec<String>, stop_words: &Option<HashSet<String>>, min_df: usize, max_df: usize) -> Vec<String>`
+
+## 4. `src/index.rs`
+- **役割**: 文書コレクション全体の管理。ドキュメントの追加・検索処理。
+- **主要構造体**:
+  - `DocumentIndex`:
+    - new(opts: VectorizerOptions) -> Self
+    - insert(&mut self, doc_id: usize, content: &str)
+    - get_tfidf(&self, doc_id: usize) -> Vec<(String, f64)>
+    - query(&self, text: &str) -> Vec<(usize, f64)>
+
+## 5. `src/main.rs` (バイナリ版)
+- **役割**: コマンドラインツールとしてのエントリーポイント。Rustの`clap`で引数をパース。
+- **主なサブコマンド**:
+  - `build-index`: ドキュメントフォルダからインデックスを構築
+  - `vectorize`: 入力テキストをTF-IDFベクトル化し標準出力へ出力
+
+---
+
+### 情報源
+- GitHub: https://github.com/371tti/tf-idf-vectorizer
+- Rustクレート構造規約
+
+*この記事は約2分で読めます。*
