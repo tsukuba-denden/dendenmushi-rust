@@ -15,3 +15,4 @@ Created an article 'MongoDBのストレージエンジンにおけるデータ�
 Deployed MongoDB Storage Engine Documentation via web_deploy_tool on <timestamp>
 Deployed Observer Rust documentation via web_deploy_tool on <timestamp>
 Deployed Observer-Rust-Internal documentation via web_deploy_tool
+fetch.then の発音ネタ：「えっちじゃん」ダジャレ

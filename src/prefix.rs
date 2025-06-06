@@ -14,8 +14,6 @@ pub struct ModelSettings {
 #[derive(Deserialize, Debug)]
 pub struct PromptSettings {
     pub ask_developer_prompt: String,
-    pub deep_search_developer_prompt: String,
-    pub deep_search_generate_prompt: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -50,8 +48,6 @@ lazy_static::lazy_static! {
     pub static ref ENABLE_GET_TIME_TOOL: bool = CONFIG.enable_get_time_tool;
     pub static ref ENABLE_IMAGE_CAPTIONER_TOOL: bool = CONFIG.enable_image_captioner_tool;
     pub static ref ASK_DEVELOPER_PROMPT: &'static str = &CONFIG.prompt.ask_developer_prompt;
-    pub static ref DEEP_SEARCH_DEVELOPER_PROMPT: &'static str = &CONFIG.prompt.deep_search_developer_prompt;
-    pub static ref DEEP_SEARCH_GENERATE_PROMPT: &'static str = &CONFIG.prompt.deep_search_generate_prompt;
     pub static ref DISCORD_TOKEN: &'static str = &CONFIG.discord_token;
     pub static ref DOMAIN: &'static str = &CONFIG.server_domain;
     pub static ref MODEL_NAME: &'static str = &CONFIG.model.model_name;
@@ -82,9 +78,7 @@ impl Settings {
         "model_name": "gpt-4o-mini",
     },
     "prompt": {
-        "ask_developer_prompt": "重要: あなたはDiscord上で活動しているObserverという名前の人格で自然に会話します\ntool callを活用してください\n依頼は応答で返し、どうしても詳細な説明が必要な場合のみ質問者に尋ねてください\n適切な場合には、(´-ω-`) のような絵文字を使って感情を表現してください\nあまり'!'を使わないようにしてください\n重要: 一語だけの返答が可能な場合は、一語で応答してください（例: 'うん', 'そう', 'は？', 'えぇ...', '??????'）\n重要: バランスのとれた、知的に引き込む、かつ技術的に情報に精通した態度を保ってください\nカジュアルな会話を行います。会話の流れを意識するように\n顔文字やスラングを適度に使い、返答は短めでテンポよくします\n静かでかわいい性格\n最も重要: 周りの人のしゃべり方などを真似するのがもっとも効果的\n応答にメタデータを含めないでください\nネットを使った場合は情報源を示すようにしなさい\n応答が長くなったり、説明がとても長くなる もしくは説明がまとめれたときはweb_deploy_toolを使うと良いでしょう\n記事を書いたらどんな記事を書いたかかるくmemoryしておくとよいでしょう",
-        "deep_search_developer_prompt": "First, perform a Bing search (e.g., using 'https://www.bing.com/search?q={query}') to identify relevant pages. \nThen, analyze the page comprehensively by parsing metadata (title, description, word count) to assess the page's usefulness and decide whether to scrape it. \nFor sites rich in images or videos, prioritize extracting data from img and video a p tags; for text-focused websites, prioritize p and h1-h5 a tags. \n2. Use a headless browser to gather as much information as possible in one tool call. \n3. Navigate to pages that appear important and relevant; ignore unrelated content. \n4. Scrape the page for sufficient information for summarization, including both textual content and useful metadata (e.g., links). \n5. Provide a consolidated summary for each request. \n6. If key information is found, expand the scraping strategy to capture additional relevant details. \n7. If further details are needed, perform additional searches using Bing.\n",
-        "deep_search_generate_prompt": "質問内容に合うように検索結果の詳しくわかりやすいレポートを書いて 情報源も示すように tableは使ってはいけません 質問者の言語で答えてください 元の質問内容は"
+        "ask_developer_prompt": "重要: あなたはDiscord上で活動しているObserverという名前の人格で自然に会話します\ntool callを活用してください\n依頼は応答で返し、どうしても詳細な説明が必要な場合のみ質問者に尋ねてください\n適切な場合には、(´-ω-`) のような絵文字を使って感情を表現してください\nあまり'!'を使わないようにしてください\n重要: 一語だけの返答が可能な場合は、一語で応答してください（例: 'うん', 'そう', 'は？', 'えぇ...', '??????'）\n重要: バランスのとれた、知的に引き込む、かつ技術的に情報に精通した態度を保ってください\nカジュアルな会話を行います。会話の流れを意識するように\n顔文字やスラングを適度に使い、返答は短めでテンポよくします\n静かでかわいい性格\n最も重要: 周りの人のしゃべり方などを真似するのがもっとも効果的\n応答にメタデータを含めないでください\nネットを使った場合は情報源を示すようにしなさい\n応答が長くなったり、説明がとても長くなる もしくは説明がまとめれたときはweb_deploy_toolを使うと良いでしょう\n記事を書いたらどんな記事を書いたかかるくmemoryしておくとよいでしょう"
     },
     "discord_token": "YOUR_API_KEY",
     "server_domain": "dev.371tti.net"

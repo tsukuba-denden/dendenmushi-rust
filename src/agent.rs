@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc, u64};
 
-use call_agent::chat::{client::{OpenAIClient, OpenAIClientState, ToolMode}, prompt::{Message, MessageContext, MessageImage}};
+use call_agent::chat::{client::{ModelConfig, OpenAIClient, OpenAIClientState, ToolMode}, prompt::{Message, MessageContext, MessageImage}};
 use log::debug;
-use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT};
+use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS};
 use regex::Regex;
 use serenity::all::{Context, CreateMessage, MessageFlags};
 use tokio::sync::Mutex;
@@ -22,6 +22,109 @@ pub struct InputMessage {
 pub struct ChannelState {
     // 並列処理のため、prompt_stream を Mutex で保護する
     pub prompt_stream: Mutex<OpenAIClientState>,
+}
+
+/// モデルの種類を指定するための列挙型
+#[derive(Clone)]
+pub enum AIModel {
+    // MO3,
+    MO4Mini,
+    MO4MiniHigh,
+    M4dot1Nano,
+}
+
+impl AIModel {
+    pub fn to_model_name(&self) -> String {
+        match self {
+            // AIModel::MO3 => "o3".to_string(),
+            AIModel::MO4Mini => "o4-mini".to_string(),
+            AIModel::MO4MiniHigh => "o4-mini-high".to_string(),
+            AIModel::M4dot1Nano => "gpt-4.1-nano".to_string(),
+        }
+    }
+
+    pub fn to_model_discription(&self) -> String {
+        match self {
+            // AIModel::MO3 => "Observer O3".to_string(),
+            AIModel::MO4Mini => "いつもの 数学とコーディングに強い".to_string(),
+            AIModel::MO4MiniHigh => "いつもより深く思考しますよ".to_string(),
+            AIModel::M4dot1Nano => "超高速応答".to_string(),
+        }
+    }
+
+    pub fn to_sec_per_rate(&self) -> usize {
+        match self {
+            // AIModel::MO3 => 1,
+            AIModel::MO4Mini => 3,
+            AIModel::MO4MiniHigh => 30,
+            AIModel::M4dot1Nano => 1,
+        }
+    }
+
+    pub fn from_model_name(model_name: &str) -> Result<Self, String> {
+        match model_name {
+            // "o3" => Ok(AIModel::MO3),
+            "o4-mini" => Ok(AIModel::MO4Mini),
+            "o4-mini-high" => Ok(AIModel::MO4MiniHigh),
+            "gpt-4.1-nano" => Ok(AIModel::M4dot1Nano),
+            _ => Err(format!("Unknown model name: {}", model_name)),
+        }
+    }
+
+    pub fn to_model_config(&self) -> ModelConfig {
+        match self {
+            // AIModel::MO3 => ModelConfig {
+            //     model: "o3".to_string(),
+            //     model_name: Some("observer".to_string()),
+            //     top_p: todo!(),
+            //     parallel_tool_calls: todo!(),
+            //     temperature: todo!(),
+            //     max_completion_tokens: todo!(),
+            //     reasoning_effort: todo!(),
+            //     presence_penalty: todo!(),
+            //     strict: todo!(),
+            // },
+            AIModel::MO4Mini => ModelConfig {
+                model: "o4-mini".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(false),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+            },
+            AIModel::MO4MiniHigh => ModelConfig {
+                model: "o4-mini-high".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(false),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("high".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+            },
+            AIModel::M4dot1Nano => ModelConfig {
+                model: "gpt-4.1-nano".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: None,
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+            },
+        }
+    }
+}
+
+impl Default for AIModel {
+    fn default() -> Self {
+        AIModel::MO4Mini
+    }
 }
 
 impl ChannelState {
@@ -89,6 +192,7 @@ impl ChannelState {
         ctx: &Context,
         msg: &serenity::all::Message,
         mut message: InputMessage,
+        model: AIModel,
     ) -> String {
         // プロンプトストリームの取得
         let user_prompt = ChannelState::prepare_user_prompt(&mut message, 1).await;
@@ -96,6 +200,7 @@ impl ChannelState {
         r_prompt_stream.add(user_prompt).await;
         let mut prompt_stream = r_prompt_stream.clone();
         drop(r_prompt_stream); // 先にロックを解除t_stream.clone();
+        prompt_stream.client.set_model_config(&model.to_model_config());
         prompt_stream.set_entry_limit(u64::MAX).await;
         let last_pos = prompt_stream.prompt.len();
 

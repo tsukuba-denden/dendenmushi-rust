@@ -1,0 +1,89 @@
+タイトル: ヒント機能＆テーブル形式！年表並べ替えクイズWebアプリの作り方
+
+はじめに
+JSONデータにID・年号・人物・出来事を持たせ、テーブル表示＋ドラッグ＆ドロップで並べ替え、年号は黒塗りヒント機能付きの年表クイズアプリを作ります。
+
+1. データ構造例
+```json
+[
+  {"id":1,"year":1776,"person":"平賀源内","text":"エレキテルを発明"},
+  {"id":2,"year":1868,"person":"新政府","text":"明治維新開始"},
+  {"id":3,"year":1945,"person":"連合国","text":"第二次世界大戦終結"}
+]
+```
+
+2. 実装サンプル
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>テーブル年表クイズ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .year {background:#000;color:#000;cursor:pointer;padding:2px 6px;border-radius:3px;}
+    .year.revealed{background:#444;color:#fff;}
+    tbody tr{cursor:grab;}
+  </style>
+</head>
+<body class="p-4">
+  <h4>ヒント機能付きテーブル年表並べ替えクイズ</h4>
+  <table id="quizTable" class="table table-bordered">
+    <thead><tr><th>年号</th><th>人物</th><th>出来事</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button id="checkBtn" class="btn btn-primary">解答</button>
+  <div id="result" class="mt-2"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+  <script>
+    const data = [
+      {id:1,year:1776,person:'平賀源内',text:'エレキテルを発明'},
+      {id:2,year:1868,person:'新政府',text:'明治維新開始'},
+      {id:3,year:1945,person:'連合国',text:'第二次世界大戦終結'}
+    ];
+    const answer = [1,2,3];
+    const tbody = document.querySelector('#quizTable tbody');
+
+    data.sort(()=>Math.random()-0.5).forEach(item=>{
+      const tr = document.createElement('tr');
+      tr.dataset.id = item.id;
+      const tdYear = document.createElement('td');
+      const span = document.createElement('span');
+      span.className='year';
+      span.textContent=item.year;
+      span.addEventListener('click',()=>span.classList.toggle('revealed'));
+      tdYear.appendChild(span);
+      tr.appendChild(tdYear);
+      ['person','text'].forEach(key=>{
+        const td=document.createElement('td');
+        td.textContent=item[key];
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+
+    Sortable.create(tbody,{animation:150});
+    document.getElementById('checkBtn').onclick=()=>{
+      const order=Array.from(tbody.children).map(r=>+r.dataset.id);
+      const ok=order.every((v,i)=>v===answer[i]);
+      document.getElementById('result').textContent=ok?'✅ 正解！':'❌ 不正解…';
+    };
+  </script>
+</body>
+</html>
+```
+
+3. ポイント
+- テーブルで年号・人物・出来事を列に分け可視化
+- 年号は`<span class="year">`で隠し、クリックで`.revealed`を切替
+- Sortable.jsで`<tbody>`内ドラッグ可能
+
+4. 拡張案
+- 年号一括表示ボタン  
+- 解説モーダル表示機能  
+- 問題の外部JSON化＆更新機能  
+
+おわりに
+テーブル形式なら並べ替えと情報比較がしやすくなります。ヒント機能を合わせて学習効果を高めましょう😊
