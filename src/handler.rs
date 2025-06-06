@@ -1,6 +1,6 @@
 use std::{str::FromStr, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 
-use actix_web::rt::task;
+use actix_web::cookie::time::serde::timestamp;
 use call_agent::chat::client::OpenAIClient;
 use tokio::time;
 use std::time::Duration;
@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serenity::{all::{ChannelId, Command, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EventHandler, Interaction, MessageFlags, Ready, User, UserId}, async_trait, futures::StreamExt};
+use serenity::{all::{ChannelId, Command, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EditInteractionResponse, EventHandler, Interaction, MessageFlags, Ready, User, UserId}, async_trait, futures::StreamExt};
 
 
 use observer::prefix::{ADMIN_USERS, RATE_CP, SEC_PER_RATE};
@@ -70,7 +70,7 @@ impl Handler {
         let user_id = message.user_id.clone();
         let mut user_conf = self.user_configs.entry(user_id.clone()).or_insert(
             PerUserConfig {
-                rate_limit: 0, // デフォルトは無制限
+                rate_limit: 1, // デフォルトは1
                 model: AIModel::default(), // デフォルトモデルを使用
             }
         );
@@ -271,19 +271,18 @@ impl EventHandler for Handler {
                 "ping" => {
                     let start = std::time::Instant::now();
                     let response_data = CreateInteractionResponseMessage::new()
-                        .content("Pong! 🏓: Measuring latency...")
-                        .ephemeral(true);
+                        .content("Pong!: Measuring latency...");
                     let response = CreateInteractionResponse::Message(response_data);
-                    let send_result = command.create_response(&ctx.http, response).await;
-                    let latency = start.elapsed().as_millis();
-                    if let Err(why) = send_result {
+                    if let Err(why) = command.create_response(&ctx.http, response).await {
                         error!("Failed to respond to ping - {:?}", why);
-                    } else {
-                        // レイテンシ情報を編集で追記
-                        let followup = CreateInteractionResponseFollowup::new()
-                            .content(format!("Pong! 🏓: {} ms", latency))
-                            .ephemeral(true);
-                        let _ = command.create_followup(&ctx.http, followup).await;
+                        return;
+                    }
+                    let latency = start.elapsed().as_millis();
+                    let edit = EditInteractionResponse::new()
+                        .content(format!("Pong! latency: {} ms", latency));
+                    
+                    if let Err(why) = command.edit_response(&ctx.http, edit).await {
+                        error!("Failed to edit ping response - {:?}", why);
                     }
                 }
 
@@ -433,7 +432,7 @@ impl EventHandler for Handler {
                         return;
                     }
                     let user_line = if command.data.options.len() > 1 {
-                        command.data.options[1].value.as_i64().unwrap_or(0) as u64
+                        command.data.options[1].value.as_i64().unwrap_or(0) as i64
                     } else {
                         1
                     };
@@ -459,11 +458,34 @@ impl EventHandler for Handler {
                             model: AIModel::default(), // デフォルトモデルを使用
                         }
                     );
-                    user_conf.rate_limit = user_line;
+
+                    // レートリミットを設定
+                    let timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards")
+                        .as_secs();
+                    if user_line == 0 {
+                        user_conf.rate_limit = 0; // 無制限
+                    } if user_line < 0 {
+                        user_conf.rate_limit = timestamp; // リセット
+                    } else {
+                        if user_conf.rate_limit < timestamp {
+                            user_conf.rate_limit = timestamp;
+                        }
+                        let sec_per_rate = *SEC_PER_RATE as u64; 
+                        user_conf.rate_limit += user_line as u64 * sec_per_rate;
+                    }
                     let message = if user_line == 0 {
                         format!("Info: {} rate limit line set to unlimited", target_user_name).to_string()
                     } else {
-                        format!("Info: rate limit line set to <t:{}:f> for user {}\ncan use observer <t:{}:R>", user_line, target_user_name, user_line + *RATE_CP as u64)
+                        let sec_per_rate = *SEC_PER_RATE as u64; // レートの回復時間
+                        let cp = *RATE_CP as u64; // レートの許容量
+                        
+                        // レートリミットの計算
+                        let limit_line = sec_per_rate * cp;
+                        let now_rate = ((timestamp + limit_line) as i64 - user_conf.rate_limit as i64) / sec_per_rate as i64;
+                        let next_time =  user_conf.rate_limit - limit_line;
+                        format!("Info: rate limit forcibly consumed. Now {}'s rate is {} (relative: <t:{}:R>)", target_user_name, now_rate, next_time)
                     };
                     let response_data = CreateInteractionResponseMessage::new()
                         .content(message);
@@ -561,8 +583,27 @@ impl EventHandler for Handler {
                 )
                 .add_option(
                     CreateCommandOption::new(CommandOptionType::Integer, "user_line", "0 for unlimited")
-                        .required(false)
-                        .min_int_value(0)
+                        .required(true)
+                        .add_int_choice("reset", -1)
+                        .add_int_choice("Unlimited", 0)
+                        .add_int_choice("sub 1", 1)
+                        .add_int_choice("sub 2", 2)
+                        .add_int_choice("sub 4", 4)
+                        .add_int_choice("sub 8", 8)
+                        .add_int_choice("sub 16", 16)
+                        .add_int_choice("sub 32", 32)
+                        .add_int_choice("sub 64", 64)
+                        .add_int_choice("sub 128", 128)
+                        .add_int_choice("sub 256", 256)
+                        .add_int_choice("sub 512", 512)
+                        .add_int_choice("sub 1024", 1024)
+                        .add_int_choice("sub 2048", 2048)
+                        .add_int_choice("sub 4096", 4096)
+                        .add_int_choice("sub 8192", 8192)
+                        .add_int_choice("sub 16384", 16384)
+                        .add_int_choice("sub 32768", 32768)
+                        .add_int_choice("sub 65536", 65536)
+
                 ),
                 CreateCommand::new("model")
                 .description("set using model")
