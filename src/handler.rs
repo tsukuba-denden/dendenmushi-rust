@@ -499,15 +499,6 @@ impl EventHandler for Handler {
 
                 "model" => {
                     let command_user_id = command.user.id.to_string();
-                    if !ADMIN_USERS.contains(&command_user_id) {
-                        let response_data = CreateInteractionResponseMessage::new()
-                            .content("Error: You do not have permission to modify model settings.");
-                        let response = CreateInteractionResponse::Message(response_data);
-                        if let Err(why) = command.create_response(&ctx.http, response).await {
-                            error!("Failed to respond to model - {:?}", why);
-                        }
-                        return;
-                    }
                     let default_model_name = AIModel::default().to_model_name();
                     let model_name = command.data.options[0].value.as_str().unwrap_or(&default_model_name);
                     let model = AIModel::from_model_name(model_name);

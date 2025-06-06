@@ -163,7 +163,7 @@ impl ChannelState {
     pub async fn new(client: &Arc<OpenAIClient>) -> Self {
         // 新しい PromptStream を生成する
         let mut prompt_stream = client.create_prompt();
-        prompt_stream.set_entry_limit(64).await;
+        prompt_stream.set_entry_limit(128).await;
         // Extend lifetime to 'static; safe because client lives for the entire duration of the program
         Self {
             prompt_stream: Mutex::new(prompt_stream),
