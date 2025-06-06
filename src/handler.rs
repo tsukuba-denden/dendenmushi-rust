@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serenity::{all::{ChannelId, Command, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage, EventHandler, Interaction, MessageFlags, Ready, User, UserId}, async_trait, futures::StreamExt};
+use serenity::{all::{ChannelId, Command, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EventHandler, Interaction, MessageFlags, Ready, User, UserId}, async_trait, futures::StreamExt};
 
 
 use observer::prefix::{ADMIN_USERS, RATE_CP, SEC_PER_RATE};
@@ -269,13 +269,21 @@ impl EventHandler for Handler {
         if let Interaction::Command(command) = interaction {
             match command.data.name.as_str() {
                 "ping" => {
+                    let start = std::time::Instant::now();
                     let response_data = CreateInteractionResponseMessage::new()
-                    .content("Pong! 🏓");
-
+                        .content("Pong! 🏓: Measuring latency...")
+                        .ephemeral(true);
                     let response = CreateInteractionResponse::Message(response_data);
-
-                    if let Err(why) = command.create_response(&ctx.http, response).await {
+                    let send_result = command.create_response(&ctx.http, response).await;
+                    let latency = start.elapsed().as_millis();
+                    if let Err(why) = send_result {
                         error!("Failed to respond to ping - {:?}", why);
+                    } else {
+                        // レイテンシ情報を編集で追記
+                        let followup = CreateInteractionResponseFollowup::new()
+                            .content(format!("Pong! 🏓: {} ms", latency))
+                            .ephemeral(true);
+                        let _ = command.create_followup(&ctx.http, followup).await;
                     }
                 }
 
@@ -453,7 +461,7 @@ impl EventHandler for Handler {
                     );
                     user_conf.rate_limit = user_line;
                     let message = if user_line == 0 {
-                        "Info: rate limit line set to unlimited".to_string()
+                        format!("Info: {} rate limit line set to unlimited", target_user_name).to_string()
                     } else {
                         format!("Info: rate limit line set to <t:{}:f> for user {}\ncan use observer <t:{}:R>", user_line, target_user_name, user_line + *RATE_CP as u64)
                     };
@@ -484,7 +492,8 @@ impl EventHandler for Handler {
                     match model {
                         Err(e_str) => {
                             let response_data = CreateInteractionResponseMessage::new()
-                                .content(format!("Error: {}", e_str));
+                                .content(format!("Error: {}", e_str))
+                                .ephemeral(true);
                             let response = CreateInteractionResponse::Message(response_data);
                             if let Err(why) = command.create_response(&ctx.http, response).await {
                                 error!("Failed to respond to model - {:?}", why);
@@ -500,7 +509,8 @@ impl EventHandler for Handler {
                             );
                             user_conf.model = model.clone();
                             let response_data = CreateInteractionResponseMessage::new()
-                            .content(format!("Info: Model set to {}", model.to_model_name()));
+                                .content(format!("Info: Model set to {}", model.to_model_name()))
+                                .ephemeral(true);
     
                             let response = CreateInteractionResponse::Message(response_data);
         
@@ -559,9 +569,11 @@ impl EventHandler for Handler {
                 .add_option(
                     CreateCommandOption::new(CommandOptionType::String, "model_name", "name of model to use")
                         .required(true)
-                        .add_string_choice(AIModel::MO4Mini.to_model_name(), AIModel::MO4Mini.to_model_discription())
-                        .add_string_choice(AIModel::MO4MiniHigh.to_model_name(), AIModel::MO4MiniHigh.to_model_discription())
-                        .add_string_choice(AIModel::M4dot1Nano.to_model_name(), AIModel::M4dot1Nano.to_model_discription())
+                        .add_string_choice(AIModel::MO4Mini.to_model_discription(), AIModel::MO4Mini.to_model_name())
+                        .add_string_choice(AIModel::MO4MiniHigh.to_model_discription(), AIModel::MO4MiniHigh.to_model_name())
+                        .add_string_choice(AIModel::M4dot1Nano.to_model_discription(), AIModel::M4dot1Nano.to_model_name())
+                        .add_string_choice(AIModel::M4dot1Mini.to_model_discription(), AIModel::M4dot1Mini.to_model_name())
+                        .add_string_choice(AIModel::M4dot1.to_model_discription(), AIModel::M4dot1.to_model_name())
                 )
             ])
         .await

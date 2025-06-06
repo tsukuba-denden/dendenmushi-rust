@@ -31,6 +31,8 @@ pub enum AIModel {
     MO4Mini,
     MO4MiniHigh,
     M4dot1Nano,
+    M4dot1Mini,
+    M4dot1,
 }
 
 impl AIModel {
@@ -40,24 +42,30 @@ impl AIModel {
             AIModel::MO4Mini => "o4-mini".to_string(),
             AIModel::MO4MiniHigh => "o4-mini-high".to_string(),
             AIModel::M4dot1Nano => "gpt-4.1-nano".to_string(),
+            AIModel::M4dot1Mini => "gpt-4.1-mini".to_string(),
+            AIModel::M4dot1 => "gpt-4.1".to_string(),
         }
     }
 
     pub fn to_model_discription(&self) -> String {
         match self {
             // AIModel::MO3 => "Observer O3".to_string(),
-            AIModel::MO4Mini => "いつもの 数学とコーディングに強い".to_string(),
-            AIModel::MO4MiniHigh => "いつもより深く思考しますよ".to_string(),
-            AIModel::M4dot1Nano => "超高速応答".to_string(),
+            AIModel::MO4Mini => "o4-mini: late=4 4いつもの 数学とコーディングに強い".to_string(),
+            AIModel::MO4MiniHigh => "o4-mini-hight: late=30 いつもより深く思考しますよ".to_string(),
+            AIModel::M4dot1Nano => "gpt-4.1-nano: late=1 超高速応答".to_string(),
+            AIModel::M4dot1Mini => "gpt-4.1-mini: late=2 高速応答".to_string(),
+            AIModel::M4dot1 => "gpt-4.1: late=10 一般".to_string(),
         }
     }
 
     pub fn to_sec_per_rate(&self) -> usize {
         match self {
             // AIModel::MO3 => 1,
-            AIModel::MO4Mini => 3,
+            AIModel::MO4Mini => 4,
             AIModel::MO4MiniHigh => 30,
             AIModel::M4dot1Nano => 1,
+            AIModel::M4dot1Mini => 2,
+            AIModel::M4dot1 => 10,
         }
     }
 
@@ -67,6 +75,8 @@ impl AIModel {
             "o4-mini" => Ok(AIModel::MO4Mini),
             "o4-mini-high" => Ok(AIModel::MO4MiniHigh),
             "gpt-4.1-nano" => Ok(AIModel::M4dot1Nano),
+            "gpt-4.1-mini" => Ok(AIModel::M4dot1Mini),
+            "gpt-4.1" => Ok(AIModel::M4dot1),
             _ => Err(format!("Unknown model name: {}", model_name)),
         }
     }
@@ -87,7 +97,7 @@ impl AIModel {
             AIModel::MO4Mini => ModelConfig {
                 model: "o4-mini".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
-                parallel_tool_calls: Some(false),
+                parallel_tool_calls: None,
                 temperature: None,
                 max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
                 reasoning_effort: Some("low".to_string()),
@@ -98,7 +108,7 @@ impl AIModel {
             AIModel::MO4MiniHigh => ModelConfig {
                 model: "o4-mini-high".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
-                parallel_tool_calls: Some(false),
+                parallel_tool_calls: None,
                 temperature: None,
                 max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
                 reasoning_effort: Some("high".to_string()),
@@ -108,6 +118,28 @@ impl AIModel {
             },
             AIModel::M4dot1Nano => ModelConfig {
                 model: "gpt-4.1-nano".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: None,
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+            },
+            AIModel::M4dot1Mini => ModelConfig {
+                model: "gpt-4.1-mini".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: None,
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+            },
+            AIModel::M4dot1 => ModelConfig {
+                model: "gpt-4.1".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: Some(true),
                 temperature: None,
