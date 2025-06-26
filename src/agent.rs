@@ -1,13 +1,15 @@
 use std::{collections::HashMap, sync::Arc, u64};
 
 use call_agent::chat::{client::{ModelConfig, OpenAIClient, OpenAIClientState, ToolMode}, prompt::{Message, MessageContext, MessageImage}};
-use log::debug;
+use log::{debug, info};
 use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS};
 use regex::Regex;
 use serenity::all::{Context, CreateMessage, MessageFlags};
 use tokio::sync::Mutex;
 
 use crate::fetch_and_encode_images;
+
+pub const PROMPT_ENTRY_LIMIT: u64 = 64; // プロンプトのエントリ数の上限
 
 #[derive(Clone, Debug)]
 pub struct InputMessage {
@@ -104,6 +106,7 @@ impl AIModel {
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
+                web_search_options: None,
             },
             AIModel::MO4MiniHigh => ModelConfig {
                 model: "o4-mini-high".to_string(),
@@ -115,6 +118,7 @@ impl AIModel {
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
+                web_search_options: None,
             },
             AIModel::M4dot1Nano => ModelConfig {
                 model: "gpt-4.1-nano".to_string(),
@@ -126,6 +130,7 @@ impl AIModel {
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
+                web_search_options: None,
             },
             AIModel::M4dot1Mini => ModelConfig {
                 model: "gpt-4.1-mini".to_string(),
@@ -137,6 +142,7 @@ impl AIModel {
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
+                web_search_options: None,
             },
             AIModel::M4dot1 => ModelConfig {
                 model: "gpt-4.1".to_string(),
@@ -148,6 +154,7 @@ impl AIModel {
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
+                web_search_options: None,
             },
         }
     }
@@ -163,7 +170,7 @@ impl ChannelState {
     pub async fn new(client: &Arc<OpenAIClient>) -> Self {
         // 新しい PromptStream を生成する
         let mut prompt_stream = client.create_prompt();
-        prompt_stream.set_entry_limit(128).await;
+        prompt_stream.set_entry_limit(PROMPT_ENTRY_LIMIT).await;
         // Extend lifetime to 'static; safe because client lives for the entire duration of the program
         Self {
             prompt_stream: Mutex::new(prompt_stream),
@@ -242,7 +249,7 @@ impl ChannelState {
             content: ASK_DEVELOPER_PROMPT.to_string(),
             name: Some(ASSISTANT_NAME.to_string()),
         }];
-        prompt_stream.add(system_prompt).await;
+        prompt_stream.add_last(system_prompt).await;
 
         // 使用したツールのトラッキング
         let mut used_tools = Vec::new();
@@ -266,6 +273,7 @@ impl ChannelState {
                 .map(|(n,arg)| (n.to_string(), arg.clone()))
                 .collect();
 
+            info!("show_tool_call - {:#?}", show_tool_call);
             for (tool_name, argument) in show_tool_call {
                 used_tools.push(tool_name.clone());
                 if let Some(explain) = argument.get("$explain") {

@@ -2,6 +2,7 @@
 use call_agent::chat::function::Tool;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
+use log::info;
 use std::collections::HashMap;
 
 pub struct GetTime {}
@@ -122,6 +123,7 @@ impl Tool for GetTime {
     }
 
     fn run(&self, args: serde_json::Value) -> Result<String, String> {
+        info!("GetTime::run called with args: {:?}", args);
         let country_code = args.get("country_code")
             .and_then(|v| v.as_str())
             .ok_or("Missing or invalid 'country_code' parameter".to_string())?;

@@ -5,7 +5,7 @@ mod handler;
 
 use handler::Handler;
 
-use call_agent::chat::client::{ModelConfig, OpenAIClient};
+use call_agent::chat::{api::{UserLocation, WebSearchOptions}, client::{ModelConfig, OpenAIClient}};
 use observer::{prefix::{ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL, ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME}, tools::{self, browsing_worker::BrowsingWorker, get_time::GetTime, image_captioner::ImageCaptionerTool, web_deploy::WebDeploy, web_scraper::Browser}};
 use tools::memory::MemoryTool;
 
@@ -187,6 +187,7 @@ async fn main() {
         presence_penalty: None,
         strict: Some(false),
         top_p: Some(1.0),
+        web_search_options: None,
     };
 
     // 基本となる OpenAIClient を生成し、ツールを定義
@@ -228,6 +229,7 @@ async fn main() {
                     presence_penalty: None,
                     strict: Some(false),
                     top_p: Some(1.0),
+                    web_search_options: None,
                 });
                 c
             })
@@ -240,7 +242,7 @@ async fn main() {
                 Some(*MAIN_MODEL_API_KEY)
             );
             c.set_model_config(&ModelConfig {
-                model: "gpt-4.1-nano".to_string(),
+                model: "gpt-4o-mini-search-preview".to_string(),
                 model_name: Some("browsing_worker".to_string()),
                 parallel_tool_calls: None,
                 temperature: None,
@@ -248,7 +250,16 @@ async fn main() {
                 reasoning_effort: None,
                 presence_penalty: None,
                 strict: Some(false),
-                top_p: Some(1.0),
+                top_p: None,
+                web_search_options: Some(WebSearchOptions {
+                    search_context_size: None,
+                    user_location: UserLocation {
+                        country: Some("JP".to_string()),
+                        region: None,
+                        city: None,
+                        timezone: None,
+                    }
+                })
             });
             c
         })
