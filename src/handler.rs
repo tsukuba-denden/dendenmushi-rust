@@ -384,7 +384,10 @@ impl EventHandler for Handler {
                 }
 
                 "collect_history" => {
-                    let entry_num = command.data.options[0].value.as_i64().unwrap_or(32) as usize;
+                    let entry_num = command.data.options.get(0)
+                        .and_then(|opt| opt.value.as_i64())
+                        .map(|val| val as usize)
+                        .unwrap_or(32);
                     let state = if let Some(existing) = self.channels.get(&command.channel_id) {
                         existing.clone()
                     } else {
