@@ -188,7 +188,7 @@ impl AIModel {
             AIModel::Gemini2dot5Flash => ModelConfig {
                 model: "gemini-2.5-flash".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
-                parallel_tool_calls: Some(true),
+                parallel_tool_calls: None,
                 temperature: None,
                 max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
                 reasoning_effort: None,
@@ -203,7 +203,7 @@ impl AIModel {
 
 impl Default for AIModel {
     fn default() -> Self {
-        AIModel::MO4Mini
+        AIModel::Gemini2dot5Flash
     }
 }
 
