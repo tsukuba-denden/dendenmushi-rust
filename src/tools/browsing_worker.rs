@@ -1,5 +1,4 @@
-
-use call_agent::chat::{client::{OpenAIClient, ToolMode}, function::Tool, prompt::{Message, MessageContext}};
+use call_agent::chat::{client::OpenAIClient, function::Tool, prompt::{Message, MessageContext}};
 use log::info;
 use serde_json::Value;
 use tokio::runtime::Runtime;

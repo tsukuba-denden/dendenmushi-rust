@@ -1,18 +1,25 @@
-use std::{str::FromStr, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
+use std::sync::Arc;
 
-use actix_web::cookie::time::serde::timestamp;
+use crate::agent::{AIModel, ChannelState, InputMessage};
 use call_agent::chat::client::OpenAIClient;
-use tokio::time;
-use std::time::Duration;
 use dashmap::DashMap;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serenity::{all::{ChannelId, Command, CommandOptionType, Context, CreateCommand, CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage, EditInteractionResponse, EventHandler, Interaction, MessageFlags, Ready, User, UserId}, async_trait, futures::StreamExt};
-
+use serenity::{
+    all::{
+        ChannelId, Command, CommandOptionType, Context, CreateCommand, CreateCommandOption,
+        CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
+        EditInteractionResponse, Interaction, Message, MessageFlags, Ready, UserId,
+    },
+    async_trait,
+    prelude::EventHandler,
+};
+use tokio::time;
+use std::time::Duration;
+use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 use observer::prefix::{ADMIN_USERS, RATE_CP, SEC_PER_RATE};
-use crate::agent::{AIModel, ChannelState, InputMessage};
 
 const TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -32,9 +39,19 @@ pub struct Handler {
     pub user_configs: DashMap<String, PerUserConfig>,
 }
 
+#[derive(Clone, Debug)]
 pub struct PerUserConfig {
     pub rate_limit: u64, // レートリミットの秒数
     pub model: AIModel,
+}
+
+impl Default for PerUserConfig {
+    fn default() -> Self {
+        Self {
+            rate_limit: 1,
+            model: AIModel::default(),
+        }
+    }
 }
 
 impl Handler {
@@ -53,7 +70,7 @@ impl Handler {
     async fn handle_mentioned_message(
         &self,
         ctx: &Context,
-        msg: &serenity::all::Message,
+        msg: &Message,
         state: Arc<ChannelState>,
         message: InputMessage,
     ) -> String {
@@ -68,12 +85,8 @@ impl Handler {
 
         // 使用モデルの取り出し
         let user_id = message.user_id.clone();
-        let mut user_conf = self.user_configs.entry(user_id.clone()).or_insert(
-            PerUserConfig {
-                rate_limit: 1, // デフォルトは1
-                model: AIModel::default(), // デフォルトモデルを使用
-            }
-        );
+        let mut user_conf = self.user_configs.entry(user_id.clone()).or_insert_with(PerUserConfig::default);
+        
         let model = user_conf.model.clone();
         let model_cost = model.to_sec_per_rate() as u64; // モデルのレート使用量
         let sec_per_rate = *SEC_PER_RATE as u64; // レートの回復時間
@@ -97,6 +110,7 @@ impl Handler {
         } else {
             user_line += add_line;
         }
+        user_conf.rate_limit = user_line;
 
         // タイピング表示のタスクを開始する
         let typing_task = tokio::spawn({
@@ -226,7 +240,7 @@ impl Handler {
 #[async_trait]
 impl EventHandler for Handler {
     /// メッセージが送信されたときの処理
-    async fn message(&self, ctx: Context, msg: serenity::all::Message) {
+    async fn message(&self, ctx: Context, msg: Message) {
         // Bot自身のメッセージは無視する
         let bot_id = ctx.cache.current_user().id;
         if msg.author.id == bot_id {
@@ -395,7 +409,10 @@ impl EventHandler for Handler {
                         self.channels.insert(command.channel_id, new_state.clone());
                         new_state
                     };
-                    let mut messages_stream = Box::pin(command.channel_id.messages_iter(&ctx.http).take(entry_num));
+                    
+                    use serenity::futures::StreamExt;
+                    use std::pin::pin;
+                    let mut messages_stream = pin!(command.channel_id.messages_iter(&ctx.http).take(entry_num));
                     let mut messages_vec = Vec::new();
                     while let Some(message_result) = messages_stream.next().await {
                         if let Ok(message) = message_result {
@@ -452,7 +469,7 @@ impl EventHandler for Handler {
                         }
                     };
                     // ユーザーidから名前を取得
-                    let user_data = UserId::from_str(&target_user_id).unwrap().to_user(&ctx.http).await.unwrap_or(User::default());
+                    let user_data = UserId::from_str(&target_user_id).unwrap().to_user(&ctx.http).await.unwrap_or_default();
                     let target_user_name = user_data.name.clone();
 
                     let mut user_conf = self.user_configs.entry(target_user_id.clone()).or_insert(
@@ -469,7 +486,7 @@ impl EventHandler for Handler {
                         .as_secs();
                     if user_line == 0 {
                         user_conf.rate_limit = 0; // 無制限
-                    } if user_line < 0 {
+                    } else if user_line < 0 {
                         user_conf.rate_limit = timestamp; // リセット
                     } else {
                         if user_conf.rate_limit < timestamp {

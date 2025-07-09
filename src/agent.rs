@@ -27,7 +27,7 @@ pub struct ChannelState {
 }
 
 /// モデルの種類を指定するための列挙型
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum AIModel {
     // MO3,
     MO4Mini,
@@ -199,6 +199,10 @@ impl ChannelState {
         let re = Regex::new(r"(\|\|.*?\|\|)").unwrap();
         message.content = re.replace_all(&message.content, "||<spoiler_msg>||").to_string();
 
+        // メンションの処理（<@user_id> を @user_name に変換）
+        let mention_re = Regex::new(r"<@(\d+)>").unwrap();
+        message.content = mention_re.replace_all(&message.content, "@user").to_string();
+
         // !hidetail が含まれていれば強制的に high detail
         let mut detail_flag = viw_image_detail;
         if message.content.contains("!hidetail") {
@@ -255,18 +259,23 @@ impl ChannelState {
         let mut r_prompt_stream = self.prompt_stream.lock().await;
         r_prompt_stream.add(user_prompt).await;
         let mut prompt_stream = r_prompt_stream.clone();
-        drop(r_prompt_stream); // 先にロックを解除t_stream.clone();
-        prompt_stream.client.set_model_config(&model.to_model_config());
+        drop(r_prompt_stream); // 先にロックを解除
+        
+        // モデル設定の確認とセット
+        let model_config = model.to_model_config();
+        debug!("Using model config: {:?}", model_config);
+        prompt_stream.client.set_model_config(&model_config);
         prompt_stream.set_entry_limit(u64::MAX).await;
         let last_pos = prompt_stream.prompt.len();
 
         // システムプロンプトの追加
-        debug!("prompt_stream - {:#?}", prompt_stream.prompt);
+        debug!("prompt_stream before system prompt - {:#?}", prompt_stream.prompt);
         let system_prompt = vec![Message::Developer {
             content: ASK_DEVELOPER_PROMPT.to_string(),
             name: Some(ASSISTANT_NAME.to_string()),
         }];
         prompt_stream.add_last(system_prompt).await;
+        debug!("prompt_stream after system prompt - {:#?}", prompt_stream.prompt);
 
         // 使用したツールのトラッキング
         let mut used_tools = Vec::new();
@@ -274,7 +283,21 @@ impl ChannelState {
         // 推論ストリームの生成
         let mut reasoning_stream = match prompt_stream.reasoning(None, &ToolMode::Auto).await {
             Ok(stream) => stream,
-            Err(e) => return format!("Err: failed reasoning - {:?}", e),
+            Err(e) => {
+                debug!("Failed to create reasoning stream: {:?}", e);
+                // フォールバック: ツールを無効にして再試行
+                debug!("Attempting fallback with tools disabled");
+                match prompt_stream.reasoning(None, &ToolMode::Disable).await {
+                    Ok(stream) => {
+                        debug!("Fallback reasoning stream created successfully");
+                        stream
+                    },
+                    Err(fallback_e) => {
+                        debug!("Fallback also failed: {:?}", fallback_e);
+                        return format!("Err: failed reasoning (both auto and fallback) - Original: {:?}, Fallback: {:?}", e, fallback_e);
+                    }
+                }
+            }
         };
 
         // 推論ループ
@@ -321,14 +344,25 @@ impl ChannelState {
             // 推論の実行
             match reasoning_stream.proceed(&mode).await {
                 Err(e) => {
-                                return format!("Err: failed reasoning - {:?}", e);
-                            }
-                Ok(_) => {},
+                    debug!("Failed to proceed reasoning: {:?}", e);
+                    return format!("Err: failed reasoning proceed - {:?}", e);
+                }
+                Ok(_) => {
+                    debug!(
+                        "Reasoning proceeded. Current content: {:?}, Tool calls: {:#?}",
+                        reasoning_stream.content,
+                        reasoning_stream.show_tool_calls()
+                    );
+                },
             }
         }
 
         // 推論結果の取得
-        let content = reasoning_stream.content.unwrap_or("Err: response is none from ai".to_string());
+        let content = reasoning_stream
+            .content
+            .clone()
+            .unwrap_or("Err: response is none from ai".to_string());
+        debug!("Model output content: {:#?}", content);
 
         // ツールコールの統計収集
         let model_info = format!("\n-# model: {}", prompt_stream.client.model_config.unwrap().model);

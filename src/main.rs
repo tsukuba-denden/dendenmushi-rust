@@ -16,8 +16,8 @@ use regex::Regex;
 
 use reqwest::Client as ReqwestClient;
 use std::io::Cursor;
-use image::{codecs::gif::GifDecoder, io::Reader as ImageReader, AnimationDecoder, DynamicImage, GenericImageView, RgbaImage};
-use base64;
+use image::{codecs::gif::GifDecoder, ImageReader, AnimationDecoder, DynamicImage, GenericImageView, ImageFormat, RgbaImage};
+use base64::{engine::general_purpose, Engine as _};
 
 async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
     println!("fetch_and_encode_images: {:?}", urls);
@@ -48,7 +48,7 @@ async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
                         "webp" => "image/webp",
                         _      => "application/octet-stream",
                     };
-                    out.push(format!("data:{};base64,{}", mime, base64::encode(&bytes)));
+                    out.push(format!("data:{};base64,{}", mime, general_purpose::STANDARD.encode(&bytes)));
                 }
             }
             continue;
@@ -75,7 +75,10 @@ async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
         // 解像度チェック
         let reader = match ext.as_str() {
             "gif" => {
-                let decoder = GifDecoder::new(Cursor::new(&bytes)).unwrap();
+                let decoder = match GifDecoder::new(Cursor::new(&bytes)) {
+                    Ok(decoder) => decoder,
+                    Err(_) => continue,
+                };
                 let mut frames = decoder.into_frames();
         
                 // Frame を取り出し
@@ -92,10 +95,16 @@ async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
                 // 通常の画像
                 let img = match ImageReader::new(Cursor::new(&bytes)).with_guessed_format() {
                     Ok(reader) => match reader.decode() {
-                        Ok(i) => i,
-                        Err(_) => continue,
+                        Ok(img) => img,
+                        Err(e) => {
+                            println!("Error decoding image: {:?}", e);
+                            continue;
+                        }
                     },
-                    Err(_) => continue,
+                    Err(e) => {
+                        println!("Error creating image reader: {:?}", e);
+                        continue;
+                    }
                 };
                 // 透過があれば白背景でフラット化
                 if img.color().has_alpha() {
@@ -142,13 +151,13 @@ async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
         // PNGで再エンコード → data URL
         let mut buf = Vec::new();
         if img
-            .write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
+            .write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
             .is_err()
         {
             continue;
         }
         total_bytes += len;
-        out.push(format!("data:image/png;base64,{}", base64::encode(&buf)));
+        out.push(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buf)));
     }
 
     out

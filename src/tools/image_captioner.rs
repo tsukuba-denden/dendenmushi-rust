@@ -5,6 +5,7 @@ use image::{codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, GenericImag
 use reqwest::Client;
 use serde_json::Value;
 use tokio::runtime::Runtime;
+use base64::{engine::general_purpose, Engine as _};
 
 /// **テキストの長さを計算するツール**
 pub struct ImageCaptionerTool {
@@ -106,7 +107,7 @@ impl ImageCaptionerTool {
         // PNG に再エンコード→data URL
         let mut buf = Vec::new();
         img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png).ok()?;
-        Some(format!("data:image/png;base64,{}", base64::encode(&buf)))
+        Some(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buf)))
     }
 }
 
