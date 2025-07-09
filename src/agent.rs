@@ -1,8 +1,13 @@
 use std::{collections::HashMap, sync::Arc, u64};
 
-use call_agent::chat::{client::{ModelConfig, OpenAIClient, OpenAIClientState, ToolMode}, prompt::{Message, MessageContext, MessageImage}};
+use call_agent::chat::{
+    client::{ModelConfig, OpenAIClient, OpenAIClientState, ToolMode},
+    prompt::{Message, MessageContext, MessageImage},
+};
 use log::{debug, info};
-use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS};
+use observer::prefix::{
+    ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS,
+};
 use regex::Regex;
 use serenity::all::{Context, CreateMessage, MessageFlags};
 use tokio::sync::Mutex;
@@ -57,7 +62,9 @@ impl AIModel {
         match self {
             // AIModel::MO3 => "Observer O3".to_string(),
             AIModel::MO4Mini => "o4-mini: late=4 4いつもの 数学とコーディングに強い".to_string(),
-            AIModel::MO4MiniDeepResearch => "o4-mini-deep-research: late=4 いつもの 深いリサーチが得意".to_string(),
+            AIModel::MO4MiniDeepResearch => {
+                "o4-mini-deep-research: late=4 いつもの 深いリサーチが得意".to_string()
+            }
             AIModel::MO3 => "o3: late=10 openAIの最強モデル".to_string(),
             AIModel::M4dot1Nano => "gpt-4.1-nano: late=1 超高速応答".to_string(),
             AIModel::M4dot1Mini => "gpt-4.1-mini: late=2 高速応答".to_string(),
@@ -214,11 +221,15 @@ impl ChannelState {
     async fn prepare_user_prompt(message: &mut InputMessage, viw_image_detail: u8) -> Vec<Message> {
         // スポイラーを含むメッセージの処理
         let re = Regex::new(r"(\|\|.*?\|\|)").unwrap();
-        message.content = re.replace_all(&message.content, "||<spoiler_msg>||").to_string();
+        message.content = re
+            .replace_all(&message.content, "||<spoiler_msg>||")
+            .to_string();
 
         // メンションの処理（<@user_id> を @user_name に変換）
         let mention_re = Regex::new(r"<@(\d+)>").unwrap();
-        message.content = mention_re.replace_all(&message.content, "@user").to_string();
+        message.content = mention_re
+            .replace_all(&message.content, "@user")
+            .to_string();
 
         // !hidetail が含まれていれば強制的に high detail
         let mut detail_flag = viw_image_detail;
@@ -265,7 +276,7 @@ impl ChannelState {
     }
 
     pub async fn reasoning(
-        &self, 
+        &self,
         ctx: &Context,
         msg: &serenity::all::Message,
         mut message: InputMessage,
@@ -277,7 +288,7 @@ impl ChannelState {
         r_prompt_stream.add(user_prompt).await;
         let mut prompt_stream = r_prompt_stream.clone();
         drop(r_prompt_stream); // 先にロックを解除
-        
+
         // モデル設定の確認とセット
         let model_config = model.to_model_config();
         debug!("Using model config: {:?}", model_config);
@@ -286,13 +297,19 @@ impl ChannelState {
         let last_pos = prompt_stream.prompt.len();
 
         // システムプロンプトの追加
-        debug!("prompt_stream before system prompt - {:#?}", prompt_stream.prompt);
+        debug!(
+            "prompt_stream before system prompt - {:#?}",
+            prompt_stream.prompt
+        );
         let system_prompt = vec![Message::Developer {
             content: ASK_DEVELOPER_PROMPT.to_string(),
             name: Some(ASSISTANT_NAME.to_string()),
         }];
         prompt_stream.add_last(system_prompt).await;
-        debug!("prompt_stream after system prompt - {:#?}", prompt_stream.prompt);
+        debug!(
+            "prompt_stream after system prompt - {:#?}",
+            prompt_stream.prompt
+        );
 
         // 使用したツールのトラッキング
         let mut used_tools = Vec::new();
@@ -308,10 +325,13 @@ impl ChannelState {
                     Ok(stream) => {
                         debug!("Fallback reasoning stream created successfully");
                         stream
-                    },
+                    }
                     Err(fallback_e) => {
                         debug!("Fallback also failed: {:?}", fallback_e);
-                        return format!("Err: failed reasoning (both auto and fallback) - Original: {:?}, Fallback: {:?}", e, fallback_e);
+                        return format!(
+                            "Err: failed reasoning (both auto and fallback) - Original: {:?}, Fallback: {:?}",
+                            e, fallback_e
+                        );
                     }
                 }
             }
@@ -323,11 +343,12 @@ impl ChannelState {
             if reasoning_stream.can_finish() {
                 break;
             }
-            
+
             // ツールコールの表示
-            let show_tool_call: Vec<(String, serde_json::Value)> = reasoning_stream.show_tool_calls()
+            let show_tool_call: Vec<(String, serde_json::Value)> = reasoning_stream
+                .show_tool_calls()
                 .into_iter()
-                .map(|(n,arg)| (n.to_string(), arg.clone()))
+                .map(|(n, arg)| (n.to_string(), arg.clone()))
                 .collect();
 
             info!("show_tool_call - {:#?}", show_tool_call);
@@ -337,7 +358,7 @@ impl ChannelState {
                     let status_res = CreateMessage::new()
                         .content(format!("-# {}...", explain.to_string()))
                         .flags(MessageFlags::SUPPRESS_EMBEDS);
-    
+
                     if let Err(e) = msg.channel_id.send_message(&ctx.http, status_res).await {
                         debug!("Error sending message: {:?}", e);
                     }
@@ -345,13 +366,13 @@ impl ChannelState {
                     let status_res = CreateMessage::new()
                         .content(format!("-# using {}...", tool_name))
                         .flags(MessageFlags::SUPPRESS_EMBEDS);
-    
+
                     if let Err(e) = msg.channel_id.send_message(&ctx.http, status_res).await {
                         debug!("Error sending message: {:?}", e);
                     }
                 }
             }
-            
+
             // 推論の上限回数を超えた場合はツールモードを無効化
             let mode = if i == *MAX_USE_TOOL_COUNT {
                 ToolMode::Disable
@@ -370,7 +391,7 @@ impl ChannelState {
                         reasoning_stream.content,
                         reasoning_stream.show_tool_calls()
                     );
-                },
+                }
             }
         }
 
@@ -382,25 +403,33 @@ impl ChannelState {
         debug!("Model output content: {:#?}", content);
 
         // ツールコールの統計収集
-        let model_info = format!("\n-# model: {}", prompt_stream.client.model_config.unwrap().model);
+        let model_info = format!(
+            "\n-# model: {}",
+            prompt_stream.client.model_config.unwrap().model
+        );
         let mut tool_count = HashMap::new();
         for tool in used_tools {
             *tool_count.entry(tool).or_insert(0) += 1;
         }
         let used_tools_info = if !tool_count.is_empty() {
-            let tools_info: Vec<String> = tool_count.iter().map(|(tool, count)| {
-                if *count > 1 {
-                    format!("{} x{}", tool, count)
-                } else {
-                    tool.clone()
-                }
-            }).collect();
+            let tools_info: Vec<String> = tool_count
+                .iter()
+                .map(|(tool, count)| {
+                    if *count > 1 {
+                        format!("{} x{}", tool, count)
+                    } else {
+                        tool.clone()
+                    }
+                })
+                .collect();
             format!("\n-# tools: {}", tools_info.join(", "))
         } else {
             "".to_string()
         };
         // プロンプトストリームに分岐した分部をマージ
-        let differential_stream = prompt_stream.prompt.split_off(last_pos + 1 /* 先頭のシステムプロンプト消す */);
+        let differential_stream = prompt_stream.prompt.split_off(
+            last_pos + 1, /* 先頭のシステムプロンプト消す */
+        );
         {
             let mut r_prompt_stream = self.prompt_stream.lock().await;
             r_prompt_stream.add(differential_stream.into()).await;
@@ -411,8 +440,6 @@ impl ChannelState {
     pub async fn add_message(&self, mut message: InputMessage) {
         let user_prompt = ChannelState::prepare_user_prompt(&mut message, 1).await;
         let mut prompt_stream = self.prompt_stream.lock().await;
-
-
 
         prompt_stream.add(user_prompt).await;
     }
