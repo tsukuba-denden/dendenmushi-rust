@@ -36,6 +36,7 @@ pub enum AIModel {
     M4dot1Nano,
     M4dot1Mini,
     M4dot1,
+    Gemini2dot5Flash,
 }
 
 impl AIModel {
@@ -48,6 +49,7 @@ impl AIModel {
             AIModel::M4dot1Nano => "gpt-4.1-nano".to_string(),
             AIModel::M4dot1Mini => "gpt-4.1-mini".to_string(),
             AIModel::M4dot1 => "gpt-4.1".to_string(),
+            AIModel::Gemini2dot5Flash => "gemini-2.5-flash".to_string(),
         }
     }
 
@@ -60,6 +62,7 @@ impl AIModel {
             AIModel::M4dot1Nano => "gpt-4.1-nano: late=1 超高速応答".to_string(),
             AIModel::M4dot1Mini => "gpt-4.1-mini: late=2 高速応答".to_string(),
             AIModel::M4dot1 => "gpt-4.1: late=10 一般".to_string(),
+            AIModel::Gemini2dot5Flash => "gemini-2.5-flash: late=3 Googleの高速モデル".to_string(),
         }
     }
 
@@ -72,6 +75,7 @@ impl AIModel {
             AIModel::M4dot1Nano => 1,
             AIModel::M4dot1Mini => 2,
             AIModel::M4dot1 => 10,
+            AIModel::Gemini2dot5Flash => 3,
         }
     }
 
@@ -84,6 +88,7 @@ impl AIModel {
             "gpt-4.1-nano" => Ok(AIModel::M4dot1Nano),
             "gpt-4.1-mini" => Ok(AIModel::M4dot1Mini),
             "gpt-4.1" => Ok(AIModel::M4dot1),
+            "gemini-2.5-flash" => Ok(AIModel::Gemini2dot5Flash),
             _ => Err(format!("Unknown model name: {}", model_name)),
         }
     }
@@ -163,6 +168,18 @@ impl AIModel {
             },
             AIModel::M4dot1 => ModelConfig {
                 model: "gpt-4.1".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: None,
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::Gemini2dot5Flash => ModelConfig {
+                model: "gemini-2.5-flash".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: Some(true),
                 temperature: None,
