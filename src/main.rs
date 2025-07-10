@@ -6,8 +6,7 @@ mod handler;
 use handler::Handler;
 
 use call_agent::chat::{api::{UserLocation, WebSearchOptions}, client::{ModelConfig, OpenAIClient}};
-use observer::{prefix::{ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL, ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME}, tools::{self, browsing_worker::BrowsingWorker, get_time::GetTime, image_captioner::ImageCaptionerTool, web_deploy::WebDeploy, web_scraper::Browser}};
-use tools::memory::MemoryTool;
+use observer::{prefix::{ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL, ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME}, tools::{browsing_worker::BrowsingWorker, get_time::GetTime, image_captioner::ImageCaptionerTool, memory::MemoryTool, web_deploy::WebDeploy, web_scraper::Browser}}; // use tools::memory::MemoryTool;
 
 use serenity::model::prelude::*;
 use serenity::prelude::*;

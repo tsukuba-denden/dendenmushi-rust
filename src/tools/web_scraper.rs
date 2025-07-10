@@ -24,7 +24,7 @@ use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use playwright::Playwright;
+// use playwright::Playwright;
 use tokio::{self};
 use std::fmt;
 
@@ -153,6 +153,7 @@ pub enum ScraperError {
     LaunchError,
     PageError,
     ScriptError,
+    Other(String), // その他のエラー
     UnknownError,
 }
 
@@ -168,6 +169,7 @@ impl fmt::Display for ScraperError {
             ScraperError::LaunchError => write!(f, "Failed to launch Playwright browser."),
             ScraperError::PageError => write!(f, "Failed to create Playwright page."),
             ScraperError::ScriptError => write!(f, "Failed to add Playwright script."),
+            ScraperError::Other(msg) => write!(f, "{}", msg),
             ScraperError::UnknownError => write!(f, "An unknown error occurred."),
         }
     }
@@ -268,51 +270,28 @@ impl Browser {
 
 
     /// Playwright を使った JS レンダリング対応スクレイピング
-    pub async fn scrape_playwright(
-        &self,
-        url: &str,
-        selector_str: &str,
-    ) -> Result<ScrapedData, ScraperError> {
-        let playwright = Playwright::initialize().await.map_err(|_| ScraperError::InitializationError)?;
-        let browser = playwright.chromium().launcher().headless(true).args(&vec![
-            // 一応,,
-            String::from("--enable-features=BlockInsecurePrivateNetworkRequests"),
-            String::from("--disable-file-system"),
-            String::from("--disable-popup-blocking"),
-            String::from("--disable-web-security"),
-            String::from("--disable-webgl"),
-            String::from("--disable-webrtc"),
-            String::from("--disable-camera"),
-            String::from("--disable-microphone"),
-            String::from("--disable-media-source"),
-            String::from("--host-resolver-rules=MAP localhost 127.255.255.255"),
-        ]).launch().await.map_err(|_| ScraperError::LaunchError)?;
-        let context = browser.context_builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .build()
-            .await.map_err(|_| ScraperError::ContextError)?;
-
-        let page = context.new_page().await.map_err(|_| ScraperError::PageError)?;
-        page.add_init_script(include_str!("stealth.min.js")).await.map_err(|_| ScraperError::ScriptError)?;
-        page.goto_builder(url).timeout(10000.0).goto().await.map_err(|_| ScraperError::NetworkError)?;
-        page.wait_for_selector_builder(selector_str).wait_for_selector().await.map_err(|_| ScraperError::TimeoutError)?;
-        let elements = page.eval(
-            &format!("Array.from(document.querySelectorAll('{}')).map(e => ({{\
-                tag: e.tagName.toLowerCase(),\
-                text: e.tagName.toLowerCase()==='img'\
-                    ? (e.getAttribute('alt')||e.getAttribute('title')||'')\
-                    : (e.innerText||''),\
-                href: e.getAttribute('href')||'',\
-                src: e.getAttribute('src')||'',\
-                alt: e.getAttribute('alt')||'',\
-                title: e.getAttribute('title')||''\
-            }}))", selector_str)
-        ).await.map_err(|_| ScraperError::ParseError)?;
-
-        let items: Vec<ScrapedItem> = serde_json::from_value(elements).map_err(|_| ScraperError::ParseError)?;
-
-        Ok(ScrapedData { items })
-    }
+    // pub async fn scrape_playwright(
+    //     &self,
+    //     url: &str,
+    // ) -> Result<String, ScraperError> {
+    //     let playwright = Playwright::initialize().await.map_err(|_| ScraperError::InitializationError)?;
+    //     let browser = playwright.chromium().launcher().headless(true).args(&vec![
+    //         "--no-sandbox",
+    //         "--disable-setuid-sandbox",
+    //         "--disable-dev-shm-usage",
+    //         "--disable-accelerated-2d-canvas",
+    //         "--no-first-run",
+    //         "--no-zygote",
+    //         "--single-process",
+    //         "--disable-gpu"
+    //     ]).launch().await.map_err(|_| ScraperError::LaunchError)?;
+    //     let context = browser.context_builder().build().await.map_err(|_| ScraperError::ContextError)?;
+    //     let page = context.new_page().await.map_err(|_| ScraperError::PageError)?;
+    //     page.goto_builder(url).wait_until(playwright::api::WaitUntil::Load).timeout(30000).goto().await.map_err(|_| ScraperError::NavigationError)?;
+    //     page.add_init_script(STEALTH_SCRIPT, None).await.map_err(|_| ScraperError::ScriptError)?;
+    //     let content = page.content().await.map_err(|_| ScraperError::ContentError)?;
+    //     Ok(content)
+    // }
 
     pub fn compress_content(content: ScrapedData, seek_pos: usize, len: usize) -> String {
         let mut combined_text = String::new();
@@ -460,8 +439,8 @@ For searching, use Bing."
             let rt = tokio::runtime::Runtime::new().unwrap();
             match mode.as_str() {
                 "reqwest" => rt.block_on(scraper.scrape_reqwest(&url, &selector))
-                    .or_else(|_| rt.block_on(scraper.scrape_playwright(&url, &selector))),
-                "playwright" => rt.block_on(scraper.scrape_playwright(&url, &selector)),
+                    .or_else(|_| Err(ScraperError::Other("Playwright not available".to_string()))),
+                "playwright" => Err(ScraperError::Other("Playwright not available".to_string())),
                 _ => Err(ScraperError::UnknownError),
             }
         })
