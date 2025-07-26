@@ -94,8 +94,10 @@ impl Handler {
             // リミットレスアカウント
         } else if user_line < time_stamp {
             user_line = time_stamp + add_line;
+            user_conf.rate_limit = user_line;
         } else {
             user_line += add_line;
+            user_conf.rate_limit = user_line;
         }
 
         // タイピング表示のタスクを開始する
