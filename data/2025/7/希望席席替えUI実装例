@@ -1,0 +1,163 @@
+# 希望席ランダム席替えWebApp — UI実装例
+
+以下は、
+- 空席マスク入力UI
+- 名簿・希望席入力UI
+- 配置結果表示UI
+
+を含むHTML/CSS/JSの最低構成例です。好きなフレームワーク無しでVanilla実装しています。
+
+---
+## 1. index.html
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>希望席席替えApp</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>希望席席替えApp</h1>
+
+  <!-- 1) 空席マスク入力 -->
+  <section id="mask-section">
+    <h2>空席パターン設定</h2>
+    <p>セルをクリックして「1」にすると希望エリアに含まれます。</p>
+    <div id="mask-grid"></div>
+    <button id="save-mask">マスク保存</button>
+  </section>
+
+  <!-- 2) 生徒名簿＆希望入力 -->
+  <section id="prefs-section">
+    <h2>名簿 & 希望席設定</h2>
+    <table id="student-table">
+      <thead><tr><th>名前</th><th>第1希望</th><th>第2希望</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button id="add-student">生徒追加</button>
+    <button id="run-assign">席替え実行</button>
+  </section>
+
+  <!-- 3) 結果表示 -->
+  <section id="result-section">
+    <h2>配置結果</h2>
+    <pre id="result-output"></pre>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
+```
+
+---
+## 2. style.css
+```css
+body { font-family: sans-serif; padding: 20px; }
+h2 { margin-top: 30px; }
+#mask-grid { display: grid; grid-template-columns: repeat(6,40px); grid-gap:4px; margin-bottom:10px; }
+.mask-cell { width:40px; height:40px; background:#eee; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.mask-cell.active { background:#8f8; }
+table { width:100%; border-collapse: collapse; margin-bottom:10px; }
+th,td { border:1px solid #ccc; padding:4px; text-align:center; }
+select,input { width:100%; }
+#result-output { background:#f4f4f4; padding:10px; white-space: pre-wrap; }
+button { margin-right:10px; }
+```
+
+---
+## 3. script.js
+```js
+// 定数
+const ROWS=7, COLS=6;
+let currentMask = Array.from({length:ROWS},()=>Array(COLS).fill(0));
+const masks = {};
+const students = [];
+
+// 1) マスクUI
+const maskGrid = document.getElementById('mask-grid');
+for(let r=0;r<ROWS;r++){
+  for(let c=0;c<COLS;c++){
+    const cell = document.createElement('div');
+    cell.className='mask-cell';
+    cell.dataset.r=r; cell.dataset.c=c;
+    cell.addEventListener('click',()=>{
+      currentMask[r][c] = 1-currentMask[r][c];
+      cell.classList.toggle('active');
+    });
+    maskGrid.appendChild(cell);
+  }
+}
+// 保存
+document.getElementById('save-mask').onclick = ()=>{
+  masks.ac = JSON.parse(JSON.stringify(currentMask));
+  alert('エアコンマスク保存');
+};
+
+// 2) 名簿&希望入力UI
+const tbody = document.querySelector('#student-table tbody');
+document.getElementById('add-student').onclick = ()=>{
+  const tr=document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="名前"></td>
+    <td><select><option>front</option><option>window</option><option>aisle</option><option>ac</option></select></td>
+    <td><select><option>front</option><option>window</option><option>aisle</option><option>ac</option></select></td>
+  `;
+  tbody.appendChild(tr);
+};
+
+// 割り当て実行
+document.getElementById('run-assign').onclick = ()=>{
+  // 生徒配列生成
+  students.length=0;
+  Array.from(tbody.children).forEach(tr=>{
+    const name=tr.children[0].querySelector('input').value||'名無し';
+    const p1=tr.children[1].querySelector('select').value;
+    const p2=tr.children[2].querySelector('select').value;
+    students.push({id:name, prefs:[p1,p2]});
+  });
+  // マスクがacだけならmasks内にac
+  const result = assignWithMasks(students, masks);
+  document.getElementById('result-output').textContent = JSON.stringify(result, null, 2);
+};
+
+// config: maskを2次元配列 => 座標リスト
+function coordsFromMask(mask){
+  const list=[];
+  mask.forEach((row,r)=>row.forEach((v,c)=>{ if(v) list.push([r,c]); }));
+  return list;
+}
+
+// 割り当てロジック
+function assignWithMasks(students, masks){
+  const available=new Set();
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)available.add(`${r},${c}`);
+  const maskCoords={};
+  for(const key in masks) maskCoords[key]=coordsFromMask(masks[key]);
+  const result={};
+  students.forEach(stu=>{
+    let placed=false;
+    for(const pref of stu.prefs){
+      const cands = maskCoords[pref].filter(([r,c])=>available.has(`${r},${c}`));
+      if(cands.length){
+        const pick=cands[Math.floor(Math.random()*cands.length)];
+        result[stu.id]=pick; available.delete(`${pick[0]},${pick[1]}`);
+        placed=true; break;
+      }
+    }
+    if(!placed){
+      const rest=Array.from(available).map(s=>s.split(',').map(Number));
+      const pick=rest[Math.floor(Math.random()*rest.length)];
+      result[stu.id]=pick; available.delete(`${pick[0]},${pick[1]}`);
+    }
+  });
+  return result;
+}
+```
+
+---
+動かし方:
+1. 同じフォルダに3ファイルを保存
+2. index.html をブラウザで開く
+
+希望パターンの追加やエクスポート機能は必要に応じて拡張してください。

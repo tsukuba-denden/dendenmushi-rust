@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 
 use crate::fetch_and_encode_images;
 
-pub const PROMPT_ENTRY_LIMIT: u64 = 64; // プロンプトのエントリ数の上限
+pub const PROMPT_ENTRY_LIMIT: u64 = 48; // プロンプトのエントリ数の上限
 
 #[derive(Clone, Debug)]
 pub struct InputMessage {
@@ -29,9 +29,7 @@ pub struct ChannelState {
 /// モデルの種類を指定するための列挙型
 #[derive(Clone)]
 pub enum AIModel {
-    // MO3,
     MO4Mini,
-    MO4MiniDeepResearch, // 追加のモデル例
     MO3,
     M4dot1Nano,
     M4dot1Mini,
@@ -41,9 +39,7 @@ pub enum AIModel {
 impl AIModel {
     pub fn to_model_name(&self) -> String {
         match self {
-            // AIModel::MO3 => "o3".to_string(),
             AIModel::MO4Mini => "o4-mini".to_string(),
-            AIModel::MO4MiniDeepResearch => "o4-mini-deep-research".to_string(),
             AIModel::MO3 => "o3".to_string(),
             AIModel::M4dot1Nano => "gpt-4.1-nano".to_string(),
             AIModel::M4dot1Mini => "gpt-4.1-mini".to_string(),
@@ -53,25 +49,21 @@ impl AIModel {
 
     pub fn to_model_discription(&self) -> String {
         match self {
-            // AIModel::MO3 => "Observer O3".to_string(),
-            AIModel::MO4Mini => "o4-mini: late=4 4いつもの 数学とコーディングに強い".to_string(),
-            AIModel::MO4MiniDeepResearch => "o4-mini-deep-research: late=4 いつもの 深いリサーチが得意".to_string(),
-            AIModel::MO3 => "o3: late=10 openAIの最強モデル".to_string(),
-            AIModel::M4dot1Nano => "gpt-4.1-nano: late=1 超高速応答".to_string(),
-            AIModel::M4dot1Mini => "gpt-4.1-mini: late=2 高速応答".to_string(),
-            AIModel::M4dot1 => "gpt-4.1: late=10 一般".to_string(),
+            AIModel::MO4Mini => "o4-mini: late=10 4いつもの 数学とコーディングに強い".to_string(),
+            AIModel::MO3 => "o3: late=30 openAIの最強モデル".to_string(),
+            AIModel::M4dot1Nano => "gpt-4.1-nano: late=2 超高速応答".to_string(),
+            AIModel::M4dot1Mini => "gpt-4.1-mini: late=5 高速応答".to_string(),
+            AIModel::M4dot1 => "gpt-4.1: late=20 一般".to_string(),
         }
     }
 
     pub fn to_sec_per_rate(&self) -> usize {
         match self {
-            // AIModel::MO3 => 1,
-            AIModel::MO4Mini => 4,
-            AIModel::MO4MiniDeepResearch => 20,
-            AIModel::MO3 => 10,
-            AIModel::M4dot1Nano => 1,
-            AIModel::M4dot1Mini => 2,
-            AIModel::M4dot1 => 10,
+            AIModel::MO4Mini => 10,
+            AIModel::MO3 => 30,
+            AIModel::M4dot1Nano => 2,
+            AIModel::M4dot1Mini => 5,
+            AIModel::M4dot1 => 20,
         }
     }
 
@@ -79,7 +71,6 @@ impl AIModel {
         match model_name {
             // "o3" => Ok(AIModel::MO3),
             "o4-mini" => Ok(AIModel::MO4Mini),
-            "o4-mini-deep-research" => Ok(AIModel::MO4MiniDeepResearch),
             "o3" => Ok(AIModel::MO3),
             "gpt-4.1-nano" => Ok(AIModel::M4dot1Nano),
             "gpt-4.1-mini" => Ok(AIModel::M4dot1Mini),
@@ -103,18 +94,6 @@ impl AIModel {
             // },
             AIModel::MO4Mini => ModelConfig {
                 model: "o4-mini".to_string(),
-                model_name: Some(ASSISTANT_NAME.to_string()),
-                parallel_tool_calls: None,
-                temperature: None,
-                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                reasoning_effort: Some("low".to_string()),
-                presence_penalty: None,
-                strict: Some(false),
-                top_p: Some(1.0),
-                web_search_options: None,
-            },
-            AIModel::MO4MiniDeepResearch => ModelConfig {
-                model: "o4-mini-deep-research".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: None,
                 temperature: None,

@@ -1,0 +1,109 @@
+# 希望席システム付きランダム席替えWebApp実装
+
+## 背景
+D&D（ドラッグ＆ドロップ）ではなく、完全に自動で「前」「窓側」「通路側」「エアコンが当たる場所」といった複数の希望パターンに基づいてランダム席替えを行いたい場合、従来の座席IDリスト方式では柔軟性に欠けます。そこで、“希望席パターン”を2次元マスク（0/1配列）で定義し、マスク上の`1`セルだけを対象にランダム配置する方法を紹介します。
+
+## 実装概要
+1. **座席全体**を2次元配列で管理（`seats[row][col]`）
+2. **希望パターン**を0/1マスク配列で定義（`frontMask`や`acMask`など）
+3. マスクを座標リストに変換し、まだ空いているセルを抽出してランダム配置
+4. 希望全滅時は残りセルからランダム配置
+
+## サンプルコード
+```js
+// --- 1) 定数定義 ---
+const ROWS = 7, COLS = 6;
+// 2次元席配列（結果格納用）
+const seats = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+
+// --- 2) 希望マスク定義例 ---
+const acMask = [
+  [0,0,0,0,0,0],
+  [0,0,1,1,1,0],
+  [0,0,1,1,1,0],
+  [0,0,0,0,0,0],
+  [0,0,1,1,1,0],
+  [0,0,1,1,1,0],
+  [0,0,0,0,0,0],
+];
+// 他に frontMask, windowMask, aisleMask などを同様に用意
+
+// --- 3) 生徒データ（希望リスト保持） ---
+const students = [
+  { id: 's1', prefs: ['front','ac'] },
+  { id: 's2', prefs: ['ac','window'] },
+  // …
+];
+
+// --- 4) マスク→座標リスト変換関数 ---
+function coordsFromMask(mask) {
+  const list = [];
+  mask.forEach((row, r) => {
+    row.forEach((v, c) => {
+      if (v === 1) list.push([r, c]);
+    });
+  });
+  return list;
+}
+
+// --- 5) 席割り当て関数 ---
+function assignWithMasks(students, masks) {
+  // 空き席セット（"r,c"形式）
+  const available = new Set();
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      available.add(`${r},${c}`);
+
+  // マスク毎の座標キャッシュ
+  const maskCoords = {};
+  for (const key in masks) {
+    maskCoords[key] = coordsFromMask(masks[key]);
+  }
+
+  const result = {};
+
+  students.forEach(stu => {
+    let placed = false;
+    // 希望順(trial)
+    for (const pref of stu.prefs) {
+      const candidates = maskCoords[pref]
+        .filter(([r, c]) => available.has(`${r},${c}`));
+      if (candidates.length) {
+        const rand = candidates[Math.floor(Math.random() * candidates.length)];
+        result[stu.id] = rand;
+        available.delete(`${rand[0]},${rand[1]}`);
+        placed = true;
+        break;
+      }
+    }
+    // 希望無ヒット時は残席からランダム
+    if (!placed) {
+      const rest = Array.from(available).map(s => s.split(',').map(Number));
+      const pick = rest[Math.floor(Math.random() * rest.length)];
+      result[stu.id] = pick;
+      available.delete(`${pick[0]},${pick[1]}`);
+    }
+  });
+
+  return result; // { s1: [r,c], … }
+}
+
+// --- 6) 実行例 ---
+const masks = { ac: acMask /*, front: frontMask, …*/ };
+const assignments = assignWithMasks(students, masks);
+console.log(assignments);
+```
+
+## 解説
+- **マスク**を使うことで「任意の形状の希望席領域」を簡単に定義可能
+- 空きセルの管理は`Set`で高速化
+- ループ内で希望順に「まだ空いているセル」をフィルタ→ランダム抽出
+- 最終フォールバックで“その他空席”からランダム配置
+
+## 拡張ポイント
+- 第1～第3希望に重み付け（確率調整）を導入
+- HTML/CSSで座席表UIを構築して連携
+- CSVやPDFへのエクスポート機能追加
+
+---
+**出典**: AIアシスタントObserverによる実装例 

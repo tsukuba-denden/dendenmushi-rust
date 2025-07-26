@@ -1,0 +1,164 @@
+# 席替えWebApp — 可変行列 & 希望パターン固定版
+
+以下の実装例では
+- 行数・列数をUIで指定
+- 希望は第一希望のみ（「前」「窓」「廊下」「エアコン」）
+- 希望パターンはコードに組み込み済み
+
+で動作するHTML/CSS/JS構成を示します。
+
+---
+## 1. index.html
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>席替えApp</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>席替えApp</h1>
+
+  <section>
+    <h2>設定</h2>
+    <label>行数: <input id="input-rows" type="number" value="7" min="1"></label>
+    <label>列数: <input id="input-cols" type="number" value="6" min="1"></label>
+    <button id="init-seats">適用</button>
+  </section>
+
+  <section>
+    <h2>名簿 & 希望席</h2>
+    <table id="stu-table">
+      <thead><tr><th>名前</th><th>希望</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button id="add-stu">生徒追加</button>
+    <button id="run">席替え実行</button>
+  </section>
+
+  <section>
+    <h2>結果 (row,col)</h2>
+    <pre id="output"></pre>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
+```
+
+---
+## 2. style.css
+```css
+body{font-family:sans-serif;padding:20px;}h2{margin-top:20px;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:4px;text-align:center;}button,label{margin-right:10px;}pre{background:#f0f0f0;padding:10px;}
+```
+
+---
+## 3. script.js
+```js
+// 希望パターンマスク(0/1配列)
+const masksDef = {
+  ac: [
+    '000000','001110','001110','000000','001110','001110','000000'
+  ],
+  front: [
+    '011110','011110','000000','000000','000000','000000','000000'
+  ],
+  window: [
+    '110000','110000','110000','110000','110000','110000','110000'
+  ],
+  aisle: [
+    '000010','000011','000011','000011','000011','000011','000010'
+  ],
+};
+
+let ROWS, COLS;
+let students = [];
+
+// UI要素
+const inRows = document.getElementById('input-rows');
+const inCols = document.getElementById('input-cols');
+const initBtn = document.getElementById('init-seats');
+const addStu = document.getElementById('add-stu');
+const runBtn = document.getElementById('run');
+const tbody = document.querySelector('#stu-table tbody');
+const output = document.getElementById('output');
+
+// 初期設定
+initBtn.onclick = () => {
+  ROWS = +inRows.value;
+  COLS = +inCols.value;
+  // テーブルリセット
+  tbody.innerHTML = '';
+  students = [];
+};
+
+// 生徒追加
+addStu.onclick = () => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="名前"></td>
+    <td><select>
+      <option value="front">前</option>
+      <option value="window">窓側</option>
+      <option value="aisle">廊下側</option>
+      <option value="ac">エアコン</option>
+    </select></td>
+  `;
+  tbody.appendChild(tr);
+};
+
+// マスク文字列→2D配列
+function mask2Arr(strArr){
+  return strArr.map(s=>s.split('').map(ch=>+ch));
+}
+// マスク座標リスト化
+function coords(maskArr){
+  const list = [];
+  maskArr.forEach((row,r)=> row.forEach((v,c)=> v&& list.push([r,c])));
+  return list;
+}
+
+// 割り当て
+function assign(){
+  // 学生データ読み込み
+  students = Array.from(tbody.children).map(tr=>({
+    id: tr.children[0].querySelector('input').value||'名無し',
+    pref: tr.children[1].querySelector('select').value
+  }));
+
+  // 空席セット
+  const avail = new Set();
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) avail.add(`${r},${c}`);
+
+  // マスクリスト作成
+  const masks = {};
+  for(const key in masksDef){
+    masks[key] = coords(mask2Arr(masksDef[key]));
+  }
+
+  const result = {};
+  students.forEach(s=>{
+    const cands = masks[s.pref].filter(([r,c])=>avail.has(`${r},${c}`));
+    let pick;
+    if(cands.length) pick = cands[Math.floor(Math.random()*cands.length)];
+    else {
+      const rest = Array.from(avail).map(x=>x.split(',').map(Number));
+      pick = rest[Math.floor(Math.random()*rest.length)];
+    }
+    result[s.id] = pick;
+    avail.delete(`${pick[0]},${pick[1]}`);
+  });
+  output.textContent = JSON.stringify(result, null, 2);
+}
+
+runBtn.onclick = assign;
+```
+
+---
+### 使い方
+1. 行数・列数を設定して「適用」
+2. 「生徒追加」で名簿を入力し、希望を選択
+3. 「席替え実行」でシート配置結果が表示される
+
+希望枠が埋まると自動的に残席からランダム配置します。

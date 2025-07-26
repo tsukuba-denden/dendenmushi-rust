@@ -1,0 +1,235 @@
+# 希望席システム付き席替えWebApp — 多機能UI実装
+
+以下では、
+
+1. 行数・列数指定＆空席形状編集UI
+2. プリセット（希望パターン）作成・保存・選択
+3. 名簿一括入力＆希望席選択UI
+4. 結果表示マス目UI
+
+を実現するVanilla JavaScript実装のサンプルを示します。
+
+---
+## ファイル構成
+
+```
+index.html
+style.css
+script.js
+```
+
+---
+## index.html
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>多機能 席替えApp</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>多機能 席替えApp</h1>
+
+  <!-- I. 席の形指定 -->
+  <section>
+    <h2>I. 席の形を指定</h2>
+    <label>行: <input id="rows-input" type="number" value="7" min="1"></label>
+    <label>列: <input id="cols-input" type="number" value="6" min="1"></label>
+    <button id="apply-grid">適用</button>
+    <div id="grid-editor"></div>
+  </section>
+
+  <!-- II. プリセット作成 -->
+  <section>
+    <h2>II. プリセット作成</h2>
+    <button id="new-preset">New Preset</button>
+    <div id="preset-list"></div>
+  </section>
+
+  <!-- III. 名簿入力 -->
+  <section>
+    <h2>III. 名簿 & 希望席設定</h2>
+    <textarea id="roster-input" placeholder="改行区切りで名前を入力"></textarea><br>
+    <button id="load-roster">名簿読み込み</button>
+    <div id="roster-ui"></div>
+  </section>
+
+  <!-- IV. 結果表示 -->
+  <section>
+    <h2>IV. 配置結果</h2>
+    <button id="run-assign">席替え実行</button>
+    <div id="result-grid"></div>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
+```
+
+---
+## style.css
+```css
+body{font-family:sans-serif;line-height:1.5;padding:20px;}h2{margin-top:30px;}button, input, textarea{margin:5px;}#grid-editor,#result-grid{display:grid;grid-gap:2px;margin-top:10px;} .cell{width:30px;height:30px;border:1px solid #888;cursor:pointer;display:flex;align-items:center;justify-content:center;} .cell.empty{background:#fff;} .cell.seat{background:#ddd;} .cell.assigned{background:#aaf;} table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:4px;}select,input{width:100%;}
+```
+
+---
+## script.js
+```js
+// ----- グローバル変数 -----
+let ROWS=7, COLS=6;
+let gridMask = [];           // 0/1 空席マスク
+const presets = {};          // { name: mask2d }
+let roster = [];             // [{name,pref}]
+
+// ----- UI要素参照 -----
+const rowsInput = document.getElementById('rows-input');
+const colsInput = document.getElementById('cols-input');
+const applyGridBtn = document.getElementById('apply-grid');
+const gridEditor = document.getElementById('grid-editor');
+const newPresetBtn = document.getElementById('new-preset');
+const presetList = document.getElementById('preset-list');
+const rosterInput = document.getElementById('roster-input');
+const loadRosterBtn = document.getElementById('load-roster');
+const rosterUI = document.getElementById('roster-ui');
+const runAssignBtn = document.getElementById('run-assign');
+const resultGrid = document.getElementById('result-grid');
+
+// ----- 初期化 -----
+function initGrid(){
+  ROWS = +rowsInput.value; COLS = +colsInput.value;
+  gridMask = Array.from({length:ROWS},()=>Array(COLS).fill(1));
+  renderGridEditor();
+}
+applyGridBtn.onclick = initGrid;
+initGrid();
+
+// ----- グリッドエディタ描画 -----
+function renderGridEditor(){
+  gridEditor.style.gridTemplateColumns = `repeat(${COLS},30px)`;
+  gridEditor.innerHTML = '';
+  gridMask.forEach((row,r)=>{
+    row.forEach((v,c)=>{
+      const cell = document.createElement('div');
+      cell.className = `cell ${v? 'seat':'empty'}`;
+      cell.onclick = ()=>{
+        gridMask[r][c] ^=1; cell.classList.toggle('seat'); cell.classList.toggle('empty');
+      };
+      gridEditor.appendChild(cell);
+    });
+  });
+}
+
+// ----- プリセット管理 -----
+newPresetBtn.onclick = ()=>{
+  const name = prompt('プリセット名'); if(!name) return;
+  presets[name] = JSON.parse(JSON.stringify(gridMask));
+  updatePresetList();
+};
+function updatePresetList(){
+  presetList.innerHTML='';
+  for(const name in presets){
+    const btn = document.createElement('button'); btn.textContent=name;
+    btn.onclick=()=>{ gridMask = JSON.parse(JSON.stringify(presets[name])); renderGridEditor(); };
+    presetList.appendChild(btn);
+  }
+}
+
+// ----- 名簿読み込み -----
+loadRosterBtn.onclick = ()=>{
+  roster = rosterInput.value.split('\n').filter(s=>s.trim())
+    .map(name=>({name,pref:'front'}));
+  renderRosterUI();
+};
+function renderRosterUI(){
+  rosterUI.innerHTML='';
+  const tbl = document.createElement('table');
+  tbl.innerHTML = '<tr><th>名前</th><th>希望</th></tr>';
+  roster.forEach((stu,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td><input value="${stu.name}"></td>
+      <td><select>
+        <option value=front>前</option><option value=window>窓</option>
+        <option value=aisle>廊下</option><option value=ac>エアコン</option>
+      </select></td>`;
+    tr.querySelector('select').value = stu.pref;
+    tbl.appendChild(tr);
+    // on change
+    tr.querySelector('input').onchange = ()=> roster[i].name=tr.querySelector('input').value;
+    tr.querySelector('select').onchange = ()=> roster[i].pref=tr.querySelector('select').value;
+  });
+  rosterUI.appendChild(tbl);
+}
+
+// ----- マスク変換ヘルパー -----
+function maskToCoords(mask){
+  const list = [];
+  mask.forEach((row,r)=> row.forEach((v,c)=>{ if(v) list.push([r,c]); }));
+  return list;
+}
+
+// ----- 割り当て -----
+runAssignBtn.onclick = ()=>{
+  // 全座席リスト
+  const allCoords = maskToCoords(gridMask);
+  const avail = new Set(allCoords.map(([r,c])=>`${r},${c}`));
+  // パターンマスク定義
+  const patterns = { front:[], window:[], aisle:[], ac:[] };
+  for(const key in presets){ /* not used */ }
+  // 固定パターン同梱 (前,窓,廊下,エアコン)
+  const defMasks = {
+    ac: ['000000','001110','001110','000000','001110','001110','000000'],
+    front: ['011110','011110','000000','000000','000000','000000','000000'],
+    window: ['110000','110000','110000','110000','110000','110000','110000'],
+    aisle: ['000010','000011','000011','000011','000011','000011','000010'],
+  };
+  for(const k in defMasks) patterns[k] = maskToCoords(mask2Arr(defMasks[k]));
+
+  // 割り当て
+  const result = {};
+  roster.forEach(stu=>{
+    // 希望パターン座標
+    const cands = patterns[stu.pref].filter(([r,c])=> avail.has(`${r},${c}`));
+    let pick;
+    if(cands.length) pick = cands[Math.floor(Math.random()*cands.length)];
+    else {
+      // 残席から
+      const rest = Array.from(avail).map(s=>s.split(',').map(Number));
+      pick = rest[Math.floor(Math.random()*rest.length)];
+    }
+    result[stu.name] = pick;
+    avail.delete(`${pick[0]},${pick[1]}`);
+  });
+  renderResult(result);
+};
+
+// ----- 結果描画 -----
+function renderResult(res){
+  resultGrid.style.gridTemplateColumns = `repeat(${COLS},30px)`;
+  resultGrid.innerHTML='';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const cell=document.createElement('div');
+      cell.className='cell';
+      const found = Object.entries(res).find(([,rc])=>rc[0]===r&&rc[1]===c);
+      if(found){ cell.textContent=found[0]; cell.classList.add('assigned'); }
+      resultGrid.appendChild(cell);
+    }
+  }
+}
+
+// マスク文字列→2D配列
+function mask2Arr(strArr){ return strArr.map(s=>s.split('').map(ch=>+ch)); }
+```
+
+---
+### 動作手順
+
+1. I. にて行数・列数を指定し「適用」→グリッド表示
+2. マス目をクリックして☆空席☆／座席化を切り替え
+3. II. で「New Preset」を押すと現在の形を保存→一覧にボタン表示
+4. III. 名簿を改行区切りで入力し「名簿読み込み」→名前＋希望選択のテーブル生成
+5. IV. 「席替え実行」で結果グリッドを表示
+
+プリセットボタンを押せばいつでもグリッドを復元可能です。お試しください。
