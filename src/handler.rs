@@ -434,7 +434,7 @@ impl EventHandler for Handler {
                         return;
                     }
                     let user_line = if command.data.options.len() > 1 {
-                        command.data.options[1].value.as_i64().unwrap_or(0) as i64
+                        command.data.options[1].value.as_i64().unwrap_or(1) as i64
                     } else {
                         1
                     };
@@ -468,7 +468,7 @@ impl EventHandler for Handler {
                         .as_secs();
                     if user_line == 0 {
                         user_conf.rate_limit = 0; // 無制限
-                    } if user_line < 0 {
+                    } else if user_line < 0 {
                         user_conf.rate_limit = timestamp; // リセット
                     } else {
                         if user_conf.rate_limit < timestamp {
@@ -477,7 +477,7 @@ impl EventHandler for Handler {
                         let sec_per_rate = *SEC_PER_RATE as u64; 
                         user_conf.rate_limit += user_line as u64 * sec_per_rate;
                     }
-                    let message = if user_line == 0 {
+                    let message = if user_conf.rate_limit == 0 {
                         format!("Info: {} rate limit line set to unlimited", target_user_name).to_string()
                     } else {
                         let sec_per_rate = *SEC_PER_RATE as u64; // レートの回復時間
