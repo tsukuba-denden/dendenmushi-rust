@@ -2,6 +2,23 @@
 
 # Botの再起動スクリプト
 # 日本時間午前6時にcronで実行される
+# 
+# オプション:
+#   --no-clean: cargo cleanをスキップ
+
+# オプション解析
+SKIP_CLEAN=false
+for arg in "$@"; do
+    case $arg in
+        --no-clean)
+            SKIP_CLEAN=true
+            shift
+            ;;
+        *)
+            # 不明なオプションは無視
+            ;;
+    esac
+done
 
 # スクリプトの場所を基準にプロジェクトディレクトリを設定
 PROJECT_DIR="/home/yuubinnkyoku/dendenmushi"
@@ -13,6 +30,9 @@ mkdir -p "$(dirname "$LOG_FILE")"
 
 # 日付とともにログ出力
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Botの再起動を開始" >> "$LOG_FILE"
+if [ "$SKIP_CLEAN" = true ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - クリーンビルドはスキップされます" >> "$LOG_FILE"
+fi
 
 # プロジェクトディレクトリに移動
 cd "$PROJECT_DIR" || {
@@ -48,13 +68,29 @@ if ! command -v cargo >/dev/null 2>&1; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') - 警告: cargoコマンドが利用できません。既存のバイナリを使用します" >> "$LOG_FILE"
     
     # デバッグビルドが存在するかチェック
-    if [ -f "./target/debug/observer" ]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - 既存のデバッグビルドを使用します" >> "$LOG_FILE"
+    if [ -f "$CARGO_TARGET_DIR/debug/observer" ] || [ -f "./target/debug/observer" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - 既存のビルドを使用します" >> "$LOG_FILE"
     else
         echo "$(date '+%Y-%m-%d %H:%M:%S') - エラー: 利用可能なバイナリが見つかりません" >> "$LOG_FILE"
         exit 1
     fi
 else
+    # 古いビルドアーティファクトをクリーンアップ（オプションで無効化可能）
+    if [ "$SKIP_CLEAN" = false ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - 古いビルドアーティファクトをクリーンアップ中..." >> "$LOG_FILE"
+        CARGO_TARGET_DIR="$CARGO_TARGET_DIR" cargo clean >> "$LOG_FILE" 2>&1
+        
+        # ローカルのtargetディレクトリもクリーンアップ（存在する場合）
+        if [ -d "./target" ]; then
+            cargo clean >> "$LOG_FILE" 2>&1
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - ローカルビルドディレクトリもクリーンアップしました" >> "$LOG_FILE"
+        fi
+        
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - クリーンアップ完了" >> "$LOG_FILE"
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - クリーンアップをスキップします" >> "$LOG_FILE"
+    fi
+    
     # リリースビルドを実行
     echo "$(date '+%Y-%m-%d %H:%M:%S') - リリースビルドを開始..." >> "$LOG_FILE"
     if CARGO_TARGET_DIR="$CARGO_TARGET_DIR" OPENSSL_STATIC=1 cargo build --release >> "$LOG_FILE" 2>&1; then
