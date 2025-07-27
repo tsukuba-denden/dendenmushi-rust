@@ -33,7 +33,15 @@ sleep 3
 echo "$(date '+%Y-%m-%d %H:%M:%S') - プロジェクトをビルド中..." >> "$LOG_FILE"
 
 # Rustup環境をロード
-export PATH="$HOME/.linuxbrew/opt/rustup/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$PATH"
+source $HOME/.cargo/env 2>/dev/null || true
+
+# Cargoビルド用環境変数を設定
+export CARGO_TARGET_DIR="/tmp/rust_build"
+export OPENSSL_STATIC=1
+
+# ビルドディレクトリを作成
+mkdir -p "$CARGO_TARGET_DIR"
 
 # cargoコマンドの利用可能性をチェック
 if ! command -v cargo >/dev/null 2>&1; then
@@ -49,11 +57,11 @@ if ! command -v cargo >/dev/null 2>&1; then
 else
     # リリースビルドを実行
     echo "$(date '+%Y-%m-%d %H:%M:%S') - リリースビルドを開始..." >> "$LOG_FILE"
-    if cargo build --release >> "$LOG_FILE" 2>&1; then
+    if CARGO_TARGET_DIR="$CARGO_TARGET_DIR" OPENSSL_STATIC=1 cargo build --release >> "$LOG_FILE" 2>&1; then
         echo "$(date '+%Y-%m-%d %H:%M:%S') - ビルド成功" >> "$LOG_FILE"
     else
         echo "$(date '+%Y-%m-%d %H:%M:%S') - リリースビルドに失敗。デバッグビルドを試行..." >> "$LOG_FILE"
-        if cargo build >> "$LOG_FILE" 2>&1; then
+        if CARGO_TARGET_DIR="$CARGO_TARGET_DIR" OPENSSL_STATIC=1 cargo build >> "$LOG_FILE" 2>&1; then
             echo "$(date '+%Y-%m-%d %H:%M:%S') - デバッグビルド成功" >> "$LOG_FILE"
         else
             echo "$(date '+%Y-%m-%d %H:%M:%S') - エラー: ビルドに失敗しました" >> "$LOG_FILE"
@@ -66,12 +74,18 @@ fi
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Botを起動中..." >> "$LOG_FILE"
 
 # 利用可能なバイナリを決定
-if [ -f "./target/release/observer" ]; then
-    BINARY_PATH="./target/release/observer"
+if [ -f "$CARGO_TARGET_DIR/release/observer" ]; then
+    BINARY_PATH="$CARGO_TARGET_DIR/release/observer"
     echo "$(date '+%Y-%m-%d %H:%M:%S') - リリース版バイナリを使用" >> "$LOG_FILE"
+elif [ -f "$CARGO_TARGET_DIR/debug/observer" ]; then
+    BINARY_PATH="$CARGO_TARGET_DIR/debug/observer"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - デバッグ版バイナリを使用" >> "$LOG_FILE"
+elif [ -f "./target/release/observer" ]; then
+    BINARY_PATH="./target/release/observer"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - ローカルリリース版バイナリを使用" >> "$LOG_FILE"
 elif [ -f "./target/debug/observer" ]; then
     BINARY_PATH="./target/debug/observer"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - デバッグ版バイナリを使用" >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - ローカルデバッグ版バイナリを使用" >> "$LOG_FILE"
 else
     echo "$(date '+%Y-%m-%d %H:%M:%S') - エラー: 実行可能なバイナリが見つかりません" >> "$LOG_FILE"
     exit 1

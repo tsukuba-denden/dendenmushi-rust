@@ -7,3 +7,31 @@ cargo: error while loading shared libraries: libssl.so.3: cannot open shared obj
 2025-07-27 23:34:22 - リリースビルドに失敗。デバッグビルドを試行...
 cargo: error while loading shared libraries: libssl.so.3: cannot open shared object file: No such file or directory
 2025-07-27 23:34:22 - エラー: ビルドに失敗しました
+2025-07-27 23:42:40 - Botの再起動を開始
+2025-07-27 23:42:40 - 既存のBotプロセスを検索・終了中...
+2025-07-27 23:42:40 - 既存のプロセスが見つかりませんでした
+2025-07-27 23:42:43 - プロジェクトをビルド中...
+2025-07-27 23:42:43 - リリースビルドを開始...
+   Compiling openssl-sys v0.9.109
+   Compiling openssl v0.10.73
+   Compiling native-tls v0.2.14
+   Compiling tokio-native-tls v0.3.1
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.22
+   Compiling call-agent v1.5.4
+   Compiling observer v0.1.0 (/home/yuubinnkyoku/dendenmushi)
+2025-07-27 23:48:30 - Botの再起動を開始
+2025-07-27 23:48:30 - 既存のBotプロセスを検索・終了中...
+2025-07-27 23:48:30 - 既存のプロセスが見つかりませんでした
+2025-07-27 23:48:33 - プロジェクトをビルド中...
+2025-07-27 23:48:33 - リリースビルドを開始...
+   Compiling reqwest v0.12.22
+   Compiling call-agent v1.5.4
+   Compiling observer v0.1.0 (/home/yuubinnkyoku/dendenmushi)
+    Finished `release` profile [optimized] target(s) in 41.72s
+2025-07-27 23:49:15 - ビルド成功
+2025-07-27 23:49:15 - Botを起動中...
+2025-07-27 23:49:15 - リリース版バイナリを使用
+2025-07-27 23:49:15 - Bot起動完了 (PID: 3471398)
+2025-07-27 23:49:20 - Botが正常に動作しています
+2025-07-27 23:49:20 - 再起動処理完了
