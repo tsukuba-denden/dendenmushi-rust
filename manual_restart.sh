@@ -4,15 +4,18 @@
 # 日常的なメンテナンス用
 #
 # 使用方法:
-#   ./manual_restart.sh         # 通常の再起動（クリーンビルド有り）
-#   ./manual_restart.sh --no-clean  # 高速再起動（クリーンビルド無し）
+#   ./manual_restart.sh         # 対話的にクリーンビルドの有無を選択
 
 echo "=== Bot手動再起動スクリプト ==="
 echo "実行日時: $(date '+%Y-%m-%d %H:%M:%S')"
 
-# オプションをチェック
+# クリーンビルドの選択
+echo ""
+read -p "クリーンビルドを実行しますか？ (Y/n): " -n 1 -r
+echo    # 改行
+
 RESTART_OPTIONS=""
-if [ "$1" = "--no-clean" ]; then
+if [[ $REPLY =~ ^[Nn]$ ]]; then
     echo "高速再起動モード（クリーンビルドをスキップ）"
     RESTART_OPTIONS="--no-clean"
 else

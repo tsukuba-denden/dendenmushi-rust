@@ -4,3 +4,4 @@ config.json
 data/ch_conf.json
 
 *.out
+*.log
