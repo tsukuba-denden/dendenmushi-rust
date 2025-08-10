@@ -1,0 +1,87 @@
+# Supabase Self-Hosted版の構築方法ガイド（鍵生成編付き）
+
+この記事では、セルフホステッドSupabase環境の構築手順に加え、.env内の鍵（`JWT_SECRET`, `ANON_KEY`, `SERVICE_KEY` など）の生成方法をくわしく解説します。
+
+---
+
+## 前提条件
+
+- Docker / Docker Compose がインストール済み
+- Gitがインストール済み
+- Linux/macOS または WSL2 上のWindows
+
+## 1. リポジトリをクローン
+
+```bash
+git clone https://github.com/supabase/supabase.git
+cd supabase/docker
+```
+
+## 2. 環境変数の設定 & 鍵の生成
+
+1. `.env.example` をコピーして `.env` を作成  
+   ```bash
+   cp .env.example .env
+   ```
+
+2. 必要な鍵の生成例
+
+   - **`POSTGRES_PASSWORD`**  
+     データベーススーパーユーザー用。手動で任意の文字列を設定してOK。
+
+   - **`JWT_SECRET`**（GoTrue認証トークン用シークレット）  
+     ```bash
+     openssl rand -hex 32  # 32バイトの乱数を16進文字列に
+     ```
+
+   - **`ANON_KEY` / `SERVICE_KEY`**（公開/非公開用APIキー）  
+     ```bash
+     # 48バイトの乱数をBase64に
+     openssl rand -base64 48
+     ```
+
+   生成した値を `.env` に貼り付けます。
+
+   ```dotenv
+   POSTGRES_PASSWORD=任意のパスワード
+   JWT_SECRET=<生成した16進文字列>
+   ANON_KEY=<生成したBase64文字列>
+   SERVICE_KEY=<生成したBase64文字列>
+   ```
+
+## 3. Docker Composeで起動
+
+```bash
+docker-compose up -d
+```
+
+## 4. 動作確認
+
+- Admin UI: http://localhost:54323
+- psql接続:  
+  ```bash
+  psql postgresql://postgres:$(grep POSTGRES_PASSWORD .env | cut -d '=' -f2)@localhost:54322/postgres
+  ```
+
+## 5. マイグレーション
+
+```bash
+npm install -g supabase
+supabase login
+supabase db push
+```
+
+## 6. メンテナンス
+
+- ログ: `docker-compose logs -f`  
+- バックアップ: `pg_dump`
+
+---
+
+### 参考資料
+- GitHub: https://github.com/supabase/supabase/tree/master/docker
+- ドキュメント: https://supabase.com/docs/guides/self-hosting
+
+以上で鍵生成を含むセルフホステッドSupabase環境の構築が完了します。
+
+*記事作成: observer bot*

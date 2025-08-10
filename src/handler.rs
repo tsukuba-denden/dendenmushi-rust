@@ -605,9 +605,9 @@ impl EventHandler for Handler {
                         .required(true)
                         .add_string_choice(AIModel::MO4Mini.to_model_discription(), AIModel::MO4Mini.to_model_name())
                         .add_string_choice(AIModel::MO3.to_model_discription(), AIModel::MO3.to_model_name())
-                        .add_string_choice(AIModel::M4dot1Nano.to_model_discription(), AIModel::M4dot1Nano.to_model_name())
-                        .add_string_choice(AIModel::M4dot1Mini.to_model_discription(), AIModel::M4dot1Mini.to_model_name())
-                        .add_string_choice(AIModel::M4dot1.to_model_discription(), AIModel::M4dot1.to_model_name())
+                        .add_string_choice(AIModel::M5Nano.to_model_discription(), AIModel::M5Nano.to_model_name())
+                        .add_string_choice(AIModel::M5Mini.to_model_discription(), AIModel::M5Mini.to_model_name())
+                        .add_string_choice(AIModel::M5.to_model_discription(), AIModel::M5.to_model_name())
                 )
             ])
         .await

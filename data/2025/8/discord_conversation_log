@@ -1,0 +1,44 @@
+# Discord Conversation JSONL Log
+以下は、指定のDiscordチャットから抽出したメッセージをJSON Lines形式（.jsonl）で表現したものです。
+
+```jsonl
+{"msg_id":"1400115634322538689","user_name":"amexcord","content":"これガチ便利","replay_msg":null}
+{"msg_id":"1400442168258199713","user_name":"sururu_k","content":"Progateでjs html cssすべて終わらせて スキルアップしたいけど何作ればいいかわからない教えて下さい","replay_msg":null}
+{"msg_id":"1400442468658581604","user_name":"akk._.u","content":"Progateでjs html cssすべて終わらせて スキルアップしたいけど何作ればいいかわからない教えて下さい;takos","replay_msg":null}
+{"msg_id":"1400442485527810048","user_name":"akk._.u","content":"うそ","replay_msg":null}
+{"msg_id":"1400442509225627749","user_name":"akk._.u","content":"takosはtailwindcssにゃのでだめ","replay_msg":null}
+{"msg_id":"1400442544894115941","user_name":"akk._.u","content":"初心者はTailwind CSSとか触っちゃだめ","replay_msg":null}
+{"msg_id":"1400442572232593479","user_name":"akk._.u","content":"Vibe Codingも同じく","replay_msg":null}
+{"msg_id":"1400443248614310030","user_name":"sururu_k","content":"canvas node jsとか触れてみたいまあまあできるようになったらReact触りたいけどｊｓ全然わからん","replay_msg":null}
+{"msg_id":"1400443364142219285","user_name":"tako40362","content":"takosはtailwindcssにゃのでだめ;なんと生cssも書いています","replay_msg":null}
+{"msg_id":"1400443459407708334","user_name":"tako40362","content":"tailwind cssに書き直せない部分はどうにもできないのでなとそのままcss!","replay_msg":null}
+{"msg_id":"1400443471193444362","user_name":"tako40362","content":"まこもです","replay_msg":null}
+{"msg_id":"1400443989148045415","user_name":"sururu_k","content":"イマイチフレームワークとかいうなぞの横文字が理解できてない","replay_msg":null}
+{"msg_id":"1400444629714993243","user_name":"sururu_k","content":"イマイチフレームワークの理解ができないReactとかnodeｊｓとか tailwind cssとかなに？Reactとnode jsでｊｓじゃないの？ <@1327652376026419264>","replay_msg":null}
+{"msg_id":"1400444646961844278","user_name":"observer","content":"たとえば次の３ステップで試してみるのはどう？...","replay_msg":null}
+{"msg_id":"1400444765882814515","user_name":"sururu_k","content":"フレームワークとかいう言葉の意味がわからん","replay_msg":null}
+{"msg_id":"1400444777543106682","user_name":"observer","content":"フレームワークは「アプリを作るときよく使う機能やルールをまとめて用意してくれるひな形キット」だよ...","replay_msg":null}
+{"msg_id":"1400444870832816148","user_name":"sururu_k","content":"もう少し長くそしてiqが低い人でもわかるように","replay_msg":null}
+{"msg_id":"1400444889413582918","user_name":"observer","content":"フレームワークっていうのは、「アプリを作るときに何度も必要になる仕組みやお約束ごとを、あらかじめパッケージにまとめてくれたもの」だよ...","replay_msg":null}
+{"msg_id":"1400445170159321140","user_name":"akk._.u","content":"イマイチフレームワークの理解ができないReactとかnodeｊｓとか tailwind cssとかなに？...とりあえずフレームワークは使わにゃい","replay_msg":null}
+{"msg_id":"1400445322722934907","user_name":"h_f_","content":"もっと長く","replay_msg":null}
+{"msg_id":"1400445236487913594","user_name":"observer","content":"フレームワークをもう少しやさしく、かつ詳しく説明すると――① なぜフレームワークが必要？...","replay_msg":null}
+{"msg_id":"1400445635240656987","user_name":"sururu_k","content":"とりあえずフレームワークは使わにゃい サーバー側で使い始めるにゃらHono","replay_msg":null}
+{"msg_id":"1400445685236629584","user_name":"sururu_k","content":"じゃあ何すればいいんやー","replay_msg":null}
+{"msg_id":"1400449724074688513","user_name":"pika0203_10245","content":"フレームワークつくりなって","replay_msg":null}
+{"msg_id":"1400449811446108160","user_name":"pika0203_10245","content":"一気に強くなるぞ","replay_msg":null}
+{"msg_id":"1400450852107325441","user_name":"sururu_k","content":"omg","replay_msg":null}
+{"msg_id":"1400455742804197479","user_name":"nyorai.jp","content":"無責任やな..","replay_msg":null}
+{"msg_id":"1400456154798096426","user_name":"nyorai.jp","content":"progateのhtml css jsが料理で言う包丁やカセットコンロの使い方だったらフレームワークは業務用スーパーの冷凍野菜とか切り身になってる魚","replay_msg":null}
+{"msg_id":"1400456427348430858","user_name":"nyorai.jp","content":"とりあえずReactの公式ドキュメンㇳのチュートリアル写経してみたら","replay_msg":null}
+{"msg_id":"1400466586774671370","user_name":"swan_prince.","content":"10年の経験を持つフルスタック開発者です。日本語を教えてくれる日本人の友達を探しています。報酬は毎月お支払いします。","replay_msg":null}
+{"msg_id":"1400466645490597928","user_name":"t3tra.net","content":"おっいつものだ","replay_msg":null}
+{"msg_id":"1400466904140873832","user_name":"tako40362","content":"17年の経験を持つフルスタック日本人です。日本語を教えてくれる日本人の友達を探しています。報酬は毎月お支払いいただきます","replay_msg":null}
+{"msg_id":"1400466932943290448","user_name":"swan_prince.","content":"ご興味がございましたらDMください。","replay_msg":null}
+{"msg_id":"1400467530224631921","user_name":"swan_prince.","content":"ご興味がございましたらDMください。","replay_msg":null}
+{"msg_id":"1400470362268897353","user_name":"akk._.u","content":"あたしもやってる","replay_msg":null}
+{"msg_id":"1400470813370749030","user_name":"t3tra.net","content":"しょーもなくても良いから一度はフレームワーク作ってみるのおすすめ 自己満足に終わったとてその経験は大切","replay_msg":null}
+{"msg_id":"1400489962029191259","user_name":"371tti","content":"<@1327652376026419264>  ここの会話からjsonlをつくってweb deployして","replay_msg":null}
+```  
+
+_ソース: Discord チャットログ_

@@ -31,9 +31,9 @@ pub struct ChannelState {
 pub enum AIModel {
     MO4Mini,
     MO3,
-    M4dot1Nano,
-    M4dot1Mini,
-    M4dot1,
+    M5Nano,
+    M5Mini,
+    M5,
 }
 
 impl AIModel {
@@ -41,29 +41,29 @@ impl AIModel {
         match self {
             AIModel::MO4Mini => "o4-mini".to_string(),
             AIModel::MO3 => "o3".to_string(),
-            AIModel::M4dot1Nano => "gpt-4.1-nano".to_string(),
-            AIModel::M4dot1Mini => "gpt-4.1-mini".to_string(),
-            AIModel::M4dot1 => "gpt-4.1".to_string(),
+            AIModel::M5Nano => "gpt-5-nano".to_string(),
+            AIModel::M5Mini => "gpt-5-mini".to_string(),
+            AIModel::M5 => "gpt-5".to_string(),
         }
     }
 
     pub fn to_model_discription(&self) -> String {
         match self {
             AIModel::MO4Mini => "o4-mini: late=10 4いつもの 数学とコーディングに強い".to_string(),
-            AIModel::MO3 => "o3: late=30 openAIの最強モデル".to_string(),
-            AIModel::M4dot1Nano => "gpt-4.1-nano: late=2 超高速応答".to_string(),
-            AIModel::M4dot1Mini => "gpt-4.1-mini: late=5 高速応答".to_string(),
-            AIModel::M4dot1 => "gpt-4.1: late=20 一般".to_string(),
+            AIModel::MO3 => "o3: late=20　推論".to_string(),
+            AIModel::M5Nano => "gpt-5-nano: late=2 超高速応答".to_string(),
+            AIModel::M5Mini => "gpt-5-mini: late=5 高速応答".to_string(),
+            AIModel::M5 => "gpt-5: late=20 一般".to_string(),
         }
     }
 
     pub fn to_sec_per_rate(&self) -> usize {
         match self {
             AIModel::MO4Mini => 10,
-            AIModel::MO3 => 30,
-            AIModel::M4dot1Nano => 2,
-            AIModel::M4dot1Mini => 5,
-            AIModel::M4dot1 => 20,
+            AIModel::MO3 => 20,
+            AIModel::M5Nano => 2,
+            AIModel::M5Mini => 5,
+            AIModel::M5 => 20,
         }
     }
 
@@ -72,9 +72,9 @@ impl AIModel {
             // "o3" => Ok(AIModel::MO3),
             "o4-mini" => Ok(AIModel::MO4Mini),
             "o3" => Ok(AIModel::MO3),
-            "gpt-4.1-nano" => Ok(AIModel::M4dot1Nano),
-            "gpt-4.1-mini" => Ok(AIModel::M4dot1Mini),
-            "gpt-4.1" => Ok(AIModel::M4dot1),
+            "gpt-5-nano" => Ok(AIModel::M5Nano),
+            "gpt-5-mini" => Ok(AIModel::M5Mini),
+            "gpt-5" => Ok(AIModel::M5),
             _ => Err(format!("Unknown model name: {}", model_name)),
         }
     }
@@ -116,37 +116,37 @@ impl AIModel {
                 top_p: Some(1.0),
                 web_search_options: None,
             },
-            AIModel::M4dot1Nano => ModelConfig {
-                model: "gpt-4.1-nano".to_string(),
+            AIModel::M5Nano => ModelConfig {
+                model: "gpt-5-nano".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: Some(true),
                 temperature: None,
                 max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                reasoning_effort: None,
+                reasoning_effort: Some("low".to_string()),
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
                 web_search_options: None,
             },
-            AIModel::M4dot1Mini => ModelConfig {
-                model: "gpt-4.1-mini".to_string(),
+            AIModel::M5Mini => ModelConfig {
+                model: "gpt-5-mini".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: Some(true),
                 temperature: None,
                 max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                reasoning_effort: None,
+                reasoning_effort: Some("low".to_string()),
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
                 web_search_options: None,
             },
-            AIModel::M4dot1 => ModelConfig {
-                model: "gpt-4.1".to_string(),
+            AIModel::M5 => ModelConfig {
+                model: "gpt-5".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: Some(true),
                 temperature: None,
                 max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                reasoning_effort: None,
+                reasoning_effort: Some("low".to_string()),
                 presence_penalty: None,
                 strict: Some(false),
                 top_p: Some(1.0),
