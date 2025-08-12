@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc, u64};
 
 use call_agent::chat::{client::{ModelConfig, OpenAIClient, OpenAIClientState, ToolMode}, prompt::{Message, MessageContext, MessageImage}};
 use log::{debug, info};
-use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS};
+use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME};
 use regex::Regex;
 use serenity::all::{Context, CreateMessage, MessageFlags};
 use tokio::sync::Mutex;
@@ -158,7 +158,8 @@ impl AIModel {
 
 impl Default for AIModel {
     fn default() -> Self {
-        AIModel::MO4Mini
+        AIModel::from_model_name(*MODEL_NAME)
+            .unwrap_or_else(|_| AIModel::MO4Mini) // デフォルトは o4-mini
     }
 }
 

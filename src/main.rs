@@ -180,7 +180,7 @@ async fn main() {
     let conf = ModelConfig {
         model: MODEL_NAME.to_string(),
         model_name: Some(ASSISTANT_NAME.to_string()),
-        parallel_tool_calls: None,
+        parallel_tool_calls: Some(true),
         temperature: None,
         max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
         reasoning_effort: Some("low".to_string()),
@@ -220,12 +220,12 @@ async fn main() {
                     Some(*MAIN_MODEL_API_KEY)
                 );
                 c.set_model_config(&ModelConfig {
-                    model: "gpt-4.1-nano".to_string(),
+                    model: "gpt-5-nano".to_string(),
                     model_name: Some("image_captioner".to_string()),
                     parallel_tool_calls: None,
                     temperature: None,
                     max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                    reasoning_effort: None,
+                    reasoning_effort: Some("low".to_string()),
                     presence_penalty: None,
                     strict: Some(false),
                     top_p: Some(1.0),
