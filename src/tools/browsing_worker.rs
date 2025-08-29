@@ -147,7 +147,8 @@ fn extract_first_url(text: &str) -> Option<String> {
 
 // URLが含まれない場合の検索処理（Bing）
 fn search_and_summarize(query: &str) -> Result<String, String> {
-    let search_url = format!("https://www.bing.com/search?q={}", urlencoding::encode(query));
+    let query = query.to_string(); // Clone the query string to own it
+    let search_url = format!("https://www.bing.com/search?q={}", urlencoding::encode(&query));
     if !WebBrowser::is_safe_url(&search_url) {
         return Err("Are you try hacking me?".to_string());
     }
