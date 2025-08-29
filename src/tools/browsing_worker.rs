@@ -68,29 +68,31 @@ impl Tool for BrowsingWorker {
                 model.add(messages).await;
                 let return_value = model.generate(None).await.map_err(|_| "Failed to generate".to_string())?;
                 let mut string = return_value.content.ok_or("Failed to result".to_string())?;
-                let annotations = &return_value.api_result.response.choices
-                    .unwrap()[0].message.annotations;
-                let captions = annotations.as_ref()
-                    .unwrap()
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|v| 
-                        v.as_object()
-                        .unwrap()
-                        .get("url_citation")
-                        .unwrap()
-                        .as_object()
-                        .unwrap()
-                        .get("url")
-                        .unwrap()
-                        .as_str()
-                        .unwrap_or("")
-                        )
-                    .collect::<Vec<_>>()
-                    .join(" ")
-                    .to_string();
-                string = format!("{}\n\nLinks: {}", string, captions);
+                // 注釈（URL引用）が存在する場合のみ安全に抽出
+                let captions = return_value
+                    .api_result
+                    .response
+                    .choices
+                    .as_ref()
+                    .and_then(|choices| choices.get(0))
+                    .and_then(|c| c.message.annotations.as_ref())
+                    .and_then(|ann| ann.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| {
+                                v.as_object()
+                                    .and_then(|o| o.get("url_citation"))
+                                    .and_then(|u| u.as_object())
+                                    .and_then(|u| u.get("url"))
+                                    .and_then(|u| u.as_str())
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
+                    .unwrap_or_default();
+                if !captions.is_empty() {
+                    string = format!("{}\n\nLinks: {}", string, captions);
+                }
                 Ok(string)
             }).map_err(|e: String| e.to_string())?;
 
