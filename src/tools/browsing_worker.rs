@@ -2,7 +2,8 @@ use call_agent::chat::{client::OpenAIClient, function::Tool, prompt::{Message, M
 use log::info;
 use serde_json::Value;
 use tokio::runtime::Runtime;
-
+use regex::Regex;
+use super::web_scraper::Browser as WebBrowser;
 
 /// **テキストの長さを計算するツール**
 pub struct BrowsingWorker {
@@ -45,6 +46,27 @@ impl Tool for BrowsingWorker {
         let query = args["query"].as_str()
             .ok_or_else(|| "Missing 'query' parameter".to_string())?
             .to_string();
+
+        // クエリ内にURLが含まれている場合は、実際にそのURLを取得して要約する
+        if let Some(url) = extract_first_url(&query) {
+            // 安全なURLのみ許可
+            if !WebBrowser::is_safe_url(&url) {
+                return Err("Are you try hacking me?".to_string());
+            }
+
+            let result = std::thread::spawn(move || -> Result<String, String> {
+                let rt = Runtime::new().expect("Failed to create runtime");
+                let scraper = WebBrowser::new();
+                let data = rt.block_on(scraper.scrape_reqwest(&url, "p, h1, h2, h3, a"))
+                    .map_err(|e| format!("Scrape error: {}", e))?;
+                let summary = WebBrowser::compress_content(data, 0, 2000);
+                Ok(format!("{}\n\nURL: {}", summary, url))
+            })
+            .join()
+            .map_err(|_| "Thread panicked".to_string())??;
+
+            return Ok(serde_json::json!({ "Summary": result }).to_string());
+        }
 
         let mut model = self.model.clone().create_prompt();
 
@@ -104,4 +126,11 @@ impl Tool for BrowsingWorker {
         // JSONで結果を返す
         Ok(serde_json::json!({ "Summary": result }).to_string())
     }
+}
+
+// クエリ文字列から最初のURLを抽出
+fn extract_first_url(text: &str) -> Option<String> {
+    // シンプルなURL検出（http/httpsで始まる空白区切りのトークン）
+    let re = Regex::new(r"https?://[^\s]+").ok()?;
+    re.find(text).map(|m| m.as_str().to_string())
 }
