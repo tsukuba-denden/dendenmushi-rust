@@ -1,10 +1,10 @@
 <div align="center">
 <img src="https://tsukuba-denden.github.io/img/icon_Nobackground.png" height="100mm">
-<h1 style="font-size: 50px">Observer</h1>
+<h1 style="font-size: 50px">Dendenmushi</h1>
 </div>
 
 
-dendenmushiは、自然な会話と高度なツール連携を提供する多機能なAIチャットボットであるObserver Discordをフォークして作られています。このボットは、OpenAIのGPTモデルをベースにしており、ユーザーとの対話を通じて様々なタスクを実行します。
+Dendenmushiは、自然な会話と高度なツール連携を提供する多機能なAIチャットボットであるObserver Discordをフォークして作られています。このボットは、OpenAIのGPTモデルをベースにしており、ユーザーとの対話を通じて様々なタスクを実行します。
 
 ## ToDo
 - 初期実装
