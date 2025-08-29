@@ -4,7 +4,8 @@
 </div>
 
 
-Dendenmushiは、自然な会話と高度なツール連携を提供する多機能なAIチャットボットであるObserver Discordをフォークして作られています。このボットは、OpenAIのGPTモデルをベースにしており、ユーザーとの対話を通じて様々なタスクを実行します。
+Dendenmushiは、自然な会話と高度なツール連携を提供する多機能なAIチャットボットであるObserver Discord Bot(このボットは、OpenAIのGPTモデルをベースにしており、ユーザーとの対話を通じて様々なタスクを実行する。)をフォークして作られています。
+Google AI StudioのGemini API Keyを用いることができるようになりました。
 
 ## ToDo
 - 初期実装
