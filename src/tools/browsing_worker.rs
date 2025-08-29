@@ -68,6 +68,16 @@ impl Tool for BrowsingWorker {
             return Ok(serde_json::json!({ "Summary": result }).to_string());
         }
 
+        // URLが含まれない場合は、検索で取得して要約
+        match search_and_summarize(&query) {
+            Ok(summary) => {
+                return Ok(serde_json::json!({ "Summary": summary }).to_string());
+            }
+            Err(_) => {
+                // 検索に失敗した場合は LLM フォールバック
+            }
+        }
+
         let mut model = self.model.clone().create_prompt();
 
         let result = std::thread::spawn(move || -> Result<String, String> {
@@ -133,4 +143,64 @@ fn extract_first_url(text: &str) -> Option<String> {
     // シンプルなURL検出（http/httpsで始まる空白区切りのトークン）
     let re = Regex::new(r"https?://[^\s]+").ok()?;
     re.find(text).map(|m| m.as_str().to_string())
+}
+
+// URLが含まれない場合の検索処理（Bing）
+fn search_and_summarize(query: &str) -> Result<String, String> {
+    let search_url = format!("https://www.bing.com/search?q={}", urlencoding::encode(query));
+    if !WebBrowser::is_safe_url(&search_url) {
+        return Err("Are you try hacking me?".to_string());
+    }
+
+    let result = std::thread::spawn(move || -> Result<String, String> {
+        let rt = Runtime::new().expect("Failed to create runtime");
+        let scraper = WebBrowser::new();
+        let data = rt
+            .block_on(scraper.scrape_reqwest(&search_url, "a, h2, h3"))
+            .map_err(|e| format!("Scrape error: {}", e))?;
+
+        // 上位の外部リンクを抽出
+        let mut links: Vec<(String, String)> = data
+            .items
+            .into_iter()
+            .filter_map(|it| match it.link {
+                Some(link) if link.starts_with("http") && !link.contains("bing.com") => {
+                    let title = if it.text.trim().is_empty() { link.clone() } else { it.text };
+                    Some((title, link))
+                }
+                _ => None,
+            })
+            .collect();
+
+        // 重複除去（リンク基準）
+        links.sort_by(|a, b| a.1.cmp(&b.1));
+        links.dedup_by(|a, b| a.1 == b.1);
+
+        // 先頭のリンクを簡易要約（本文の先頭を圧縮）
+        let summary = if let Some((top_title, top_link)) = links.get(0) {
+            let top_data = rt
+                .block_on(scraper.scrape_reqwest(&top_link, "p, h1, h2, h3, a"))
+                .ok();
+            let brief = top_data
+                .map(|d| WebBrowser::compress_content(d, 0, 800))
+                .unwrap_or_else(|| String::from("(内容の抽出に失敗しました)"));
+            format!("検索: {}\n上位: {}\n\n抜粋:\n{}\n\nSources:\n{}\n{}",
+                query,
+                top_title,
+                brief,
+                top_link,
+                links.iter().skip(1).take(4).map(|(_, l)| l.as_str()).collect::<Vec<_>>().join("\n")
+            )
+        } else {
+            // リンクのみ列挙
+            let list = links.iter().take(5).map(|(t, l)| format!("- {}\n  {}", t, l)).collect::<Vec<_>>().join("\n");
+            format!("検索: {}\nリンク:\n{}\n\nSearch URL: {}", query, list, search_url)
+        };
+
+        Ok(summary)
+    })
+    .join()
+    .map_err(|_| "Thread panicked".to_string())??;
+
+    Ok(result)
 }
