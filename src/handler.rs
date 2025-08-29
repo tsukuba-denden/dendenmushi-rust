@@ -107,8 +107,10 @@ impl Handler {
             // リミットレスアカウント
         } else if user_line < time_stamp {
             user_line = time_stamp + add_line;
+            user_conf.rate_limit = user_line;
         } else {
             user_line += add_line;
+            user_conf.rate_limit = user_line;
         }
         user_conf.rate_limit = user_line;
 
@@ -452,7 +454,7 @@ impl EventHandler for Handler {
                         return;
                     }
                     let user_line = if command.data.options.len() > 1 {
-                        command.data.options[1].value.as_i64().unwrap_or(0) as i64
+                        command.data.options[1].value.as_i64().unwrap_or(1) as i64
                     } else {
                         1
                     };
@@ -495,7 +497,7 @@ impl EventHandler for Handler {
                         let sec_per_rate = *SEC_PER_RATE as u64; 
                         user_conf.rate_limit += user_line as u64 * sec_per_rate;
                     }
-                    let message = if user_line == 0 {
+                    let message = if user_conf.rate_limit == 0 {
                         format!("Info: {} rate limit line set to unlimited", target_user_name).to_string()
                     } else {
                         let sec_per_rate = *SEC_PER_RATE as u64; // レートの回復時間
@@ -622,11 +624,10 @@ impl EventHandler for Handler {
                     CreateCommandOption::new(CommandOptionType::String, "model_name", "name of model to use")
                         .required(true)
                         .add_string_choice(AIModel::MO4Mini.to_model_discription(), AIModel::MO4Mini.to_model_name())
-                        .add_string_choice(AIModel::MO4MiniDeepResearch.to_model_discription(), AIModel::MO4MiniDeepResearch.to_model_name())
                         .add_string_choice(AIModel::MO3.to_model_discription(), AIModel::MO3.to_model_name())
-                        .add_string_choice(AIModel::M4dot1Nano.to_model_discription(), AIModel::M4dot1Nano.to_model_name())
-                        .add_string_choice(AIModel::M4dot1Mini.to_model_discription(), AIModel::M4dot1Mini.to_model_name())
-                        .add_string_choice(AIModel::M4dot1.to_model_discription(), AIModel::M4dot1.to_model_name())
+                        .add_string_choice(AIModel::M5Nano.to_model_discription(), AIModel::M5Nano.to_model_name())
+                        .add_string_choice(AIModel::M5Mini.to_model_discription(), AIModel::M5Mini.to_model_name())
+                        .add_string_choice(AIModel::M5.to_model_discription(), AIModel::M5.to_model_name())
                 )
             ])
         .await
