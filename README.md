@@ -1,5 +1,5 @@
 <div align="center">
-<img src="observer_icon.png" height="100mm">
+<img src="https://tsukuba-denden.github.io/img/icon_Nobackground.png" height="100mm">
 <h1 style="font-size: 50px">Observer</h1>
 </div>
 
