@@ -38,6 +38,9 @@ pub enum AIModel {
     M5Nano,
     M5Mini,
     M5,
+    Gemini25Flash,
+    Gemini15Flash,
+    Gemini15Pro,
 }
 
 impl AIModel {
@@ -48,6 +51,9 @@ impl AIModel {
             AIModel::M5Nano => "gpt-5-nano".to_string(),
             AIModel::M5Mini => "gpt-5-mini".to_string(),
             AIModel::M5 => "gpt-5".to_string(),
+            AIModel::Gemini25Flash => "gemini-2.5-flash".to_string(),
+            AIModel::Gemini15Flash => "gemini-1.5-flash".to_string(),
+            AIModel::Gemini15Pro => "gemini-1.5-pro".to_string(),
         }
     }
 
@@ -58,6 +64,9 @@ impl AIModel {
             AIModel::M5Nano => "gpt-5-nano: late=2 超高速応答".to_string(),
             AIModel::M5Mini => "gpt-5-mini: late=5 高速応答".to_string(),
             AIModel::M5 => "gpt-5: late=20 一般".to_string(),
+            AIModel::Gemini25Flash => "gemini-2.5-flash: Google Gemini 高速・汎用 (Vision/Tool対応)".to_string(),
+            AIModel::Gemini15Flash => "gemini-1.5-flash: 高速マルチモーダル (Vision向け)".to_string(),
+            AIModel::Gemini15Pro => "gemini-1.5-pro: 高性能推論".to_string(),
         }
     }
 
@@ -68,6 +77,9 @@ impl AIModel {
             AIModel::M5Nano => 2,
             AIModel::M5Mini => 5,
             AIModel::M5 => 20,
+            AIModel::Gemini25Flash => 5,
+            AIModel::Gemini15Flash => 5,
+            AIModel::Gemini15Pro => 20,
         }
     }
 
@@ -79,6 +91,9 @@ impl AIModel {
             "gpt-5-nano" => Ok(AIModel::M5Nano),
             "gpt-5-mini" => Ok(AIModel::M5Mini),
             "gpt-5" => Ok(AIModel::M5),
+            "gemini-2.5-flash" => Ok(AIModel::Gemini25Flash),
+            "gemini-1.5-flash" => Ok(AIModel::Gemini15Flash),
+            "gemini-1.5-pro" => Ok(AIModel::Gemini15Pro),
             _ => Err(format!("Unknown model name: {}", model_name)),
         }
     }
@@ -156,6 +171,42 @@ impl AIModel {
                 top_p: Some(1.0),
                 web_search_options: None,
             },
+            AIModel::Gemini25Flash => ModelConfig {
+                model: "gemini-2.5-flash".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::Gemini15Flash => ModelConfig {
+                model: "gemini-1.5-flash".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::Gemini15Pro => ModelConfig {
+                model: "gemini-1.5-pro".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
         }
     }
 }
@@ -163,7 +214,7 @@ impl AIModel {
 impl Default for AIModel {
     fn default() -> Self {
         AIModel::from_model_name(*MODEL_NAME)
-            .unwrap_or_else(|_| AIModel::MO4Mini) // デフォルトは o4-mini
+            .unwrap_or_else(|_| AIModel::Gemini25Flash) // デフォルトは Gemini
     }
 }
 

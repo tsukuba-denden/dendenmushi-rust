@@ -228,7 +228,7 @@ async fn main() {
                     Some(*MAIN_MODEL_API_KEY)
                 );
                 c.set_model_config(&ModelConfig {
-                    model: "gpt-5-nano".to_string(),
+                    model: "gemini-2.5-flash".to_string(),
                     model_name: Some("image_captioner".to_string()),
                     parallel_tool_calls: None,
                     temperature: None,
@@ -250,7 +250,7 @@ async fn main() {
                 Some(*MAIN_MODEL_API_KEY)
             );
             c.set_model_config(&ModelConfig {
-                model: "gpt-4o-mini-search-preview".to_string(),
+                model: "gemini-1.5-flash".to_string(),
                 model_name: Some("browsing_worker".to_string()),
                 parallel_tool_calls: None,
                 temperature: None,
