@@ -5,16 +5,14 @@ use call_agent::chat::{
     prompt::{Message, MessageContext, MessageImage},
 };
 use log::{debug, info};
-use observer::prefix::{
-    ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS,
-};
+use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME};
 use regex::Regex;
 use serenity::all::{Context, CreateMessage, MessageFlags};
 use tokio::sync::Mutex;
 
 use crate::fetch_and_encode_images;
 
-pub const PROMPT_ENTRY_LIMIT: u64 = 64; // プロンプトのエントリ数の上限
+pub const PROMPT_ENTRY_LIMIT: u64 = 48; // プロンプトのエントリ数の上限
 
 #[derive(Clone, Debug)]
 pub struct InputMessage {
@@ -25,6 +23,7 @@ pub struct InputMessage {
     pub user_id: String,
     pub attached_files: Vec<String>,
 }
+
 // 各チャンネルの会話履歴（state）を保持する構造体
 pub struct ChannelState {
     // 並列処理のため、prompt_stream を Mutex で保護する
@@ -34,55 +33,41 @@ pub struct ChannelState {
 /// モデルの種類を指定するための列挙型
 #[derive(Clone, Debug)]
 pub enum AIModel {
-    // MO3,
     MO4Mini,
-    MO4MiniDeepResearch, // 追加のモデル例
     MO3,
-    M4dot1Nano,
-    M4dot1Mini,
-    M4dot1,
-    Gemini2dot5Flash,
+    M5Nano,
+    M5Mini,
+    M5,
 }
 
 impl AIModel {
     pub fn to_model_name(&self) -> String {
         match self {
-            // AIModel::MO3 => "o3".to_string(),
             AIModel::MO4Mini => "o4-mini".to_string(),
-            AIModel::MO4MiniDeepResearch => "o4-mini-deep-research".to_string(),
             AIModel::MO3 => "o3".to_string(),
-            AIModel::M4dot1Nano => "gpt-4.1-nano".to_string(),
-            AIModel::M4dot1Mini => "gpt-4.1-mini".to_string(),
-            AIModel::M4dot1 => "gpt-4.1".to_string(),
-            AIModel::Gemini2dot5Flash => "gemini-2.5-flash".to_string(),
+            AIModel::M5Nano => "gpt-5-nano".to_string(),
+            AIModel::M5Mini => "gpt-5-mini".to_string(),
+            AIModel::M5 => "gpt-5".to_string(),
         }
     }
 
     pub fn to_model_discription(&self) -> String {
         match self {
-            // AIModel::MO3 => "Observer O3".to_string(),
-            AIModel::MO4Mini => "o4-mini: late=4 4いつもの 数学とコーディングに強い".to_string(),
-            AIModel::MO4MiniDeepResearch => {
-                "o4-mini-deep-research: late=4 いつもの 深いリサーチが得意".to_string()
-            }
-            AIModel::MO3 => "o3: late=10 openAIの最強モデル".to_string(),
-            AIModel::M4dot1Nano => "gpt-4.1-nano: late=1 超高速応答".to_string(),
-            AIModel::M4dot1Mini => "gpt-4.1-mini: late=2 高速応答".to_string(),
-            AIModel::M4dot1 => "gpt-4.1: late=10 一般".to_string(),
-            AIModel::Gemini2dot5Flash => "gemini-2.5-flash: late=3 Googleの高速モデル".to_string(),
+            AIModel::MO4Mini => "o4-mini: late=10 4いつもの 数学とコーディングに強い".to_string(),
+            AIModel::MO3 => "o3: late=20　推論".to_string(),
+            AIModel::M5Nano => "gpt-5-nano: late=2 超高速応答".to_string(),
+            AIModel::M5Mini => "gpt-5-mini: late=5 高速応答".to_string(),
+            AIModel::M5 => "gpt-5: late=20 一般".to_string(),
         }
     }
 
     pub fn to_sec_per_rate(&self) -> usize {
         match self {
-            // AIModel::MO3 => 1,
-            AIModel::MO4Mini => 4,
-            AIModel::MO4MiniDeepResearch => 20,
-            AIModel::MO3 => 10,
-            AIModel::M4dot1Nano => 1,
-            AIModel::M4dot1Mini => 2,
-            AIModel::M4dot1 => 10,
-            AIModel::Gemini2dot5Flash => 3,
+            AIModel::MO4Mini => 10,
+            AIModel::MO3 => 20,
+            AIModel::M5Nano => 2,
+            AIModel::M5Mini => 5,
+            AIModel::M5 => 20,
         }
     }
 
@@ -90,40 +75,29 @@ impl AIModel {
         match model_name {
             // "o3" => Ok(AIModel::MO3),
             "o4-mini" => Ok(AIModel::MO4Mini),
-            "o4-mini-deep-research" => Ok(AIModel::MO4MiniDeepResearch),
             "o3" => Ok(AIModel::MO3),
-            "gpt-4.1-nano" => Ok(AIModel::M4dot1Nano),
-            "gpt-4.1-mini" => Ok(AIModel::M4dot1Mini),
-            "gpt-4.1" => Ok(AIModel::M4dot1),
-            "gemini-2.5-flash" => Ok(AIModel::Gemini2dot5Flash),
+            "gpt-5-nano" => Ok(AIModel::M5Nano),
+            "gpt-5-mini" => Ok(AIModel::M5Mini),
+            "gpt-5" => Ok(AIModel::M5),
             _ => Err(format!("Unknown model name: {}", model_name)),
         }
     }
 
     pub fn to_model_config(&self) -> ModelConfig {
         match self {
-            AIModel::MO4MiniDeepResearch => ModelConfig {
-                model: self.to_model_name(),
-                model_name: Some(ASSISTANT_NAME.to_string()),
-                parallel_tool_calls: None,
-                temperature: None,
-                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                reasoning_effort: None,
-                presence_penalty: None,
-                strict: Some(false),
-                top_p: None,
-                web_search_options: Some(call_agent::chat::api::WebSearchOptions {
-                    search_context_size: Some("10000".to_string()),
-                    user_location: call_agent::chat::api::UserLocation {
-                        country: Some("JP".to_string()),
-                        region: None,
-                        city: None,
-                        timezone: None,
-                    }
-                })
-            },
-            _ => ModelConfig {
-                model: self.to_model_name(),
+            // AIModel::MO3 => ModelConfig {
+            //     model: "o3".to_string(),
+            //     model_name: Some("observer".to_string()),
+            //     top_p: todo!(),
+            //     parallel_tool_calls: todo!(),
+            //     temperature: todo!(),
+            //     max_completion_tokens: todo!(),
+            //     reasoning_effort: todo!(),
+            //     presence_penalty: todo!(),
+            //     strict: todo!(),
+            // },
+            AIModel::MO4Mini => ModelConfig {
+                model: "o4-mini".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: None,
                 temperature: None,
@@ -133,14 +107,63 @@ impl AIModel {
                 strict: Some(false),
                 top_p: Some(1.0),
                 web_search_options: None,
-            }
+            },
+            AIModel::MO3 => ModelConfig {
+                model: "o3".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: None,
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::M5Nano => ModelConfig {
+                model: "gpt-5-nano".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::M5Mini => ModelConfig {
+                model: "gpt-5-mini".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::M5 => ModelConfig {
+                model: "gpt-5".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: Some(true),
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
         }
     }
 }
 
 impl Default for AIModel {
     fn default() -> Self {
-        AIModel::Gemini2dot5Flash
+        AIModel::from_model_name(*MODEL_NAME)
+            .unwrap_or_else(|_| AIModel::MO4Mini) // デフォルトは o4-mini
     }
 }
 
