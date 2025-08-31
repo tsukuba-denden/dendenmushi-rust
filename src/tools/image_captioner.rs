@@ -1,11 +1,18 @@
 use std::{collections::VecDeque, io::Cursor};
 
-use call_agent::chat::{client::OpenAIClient, function::Tool, prompt::{Message, MessageContext, MessageImage}};
-use image::{codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, GenericImageView, ImageReader, RgbaImage};
+use base64::{Engine as _, engine::general_purpose};
+use call_agent::chat::{
+    client::OpenAIClient,
+    function::Tool,
+    prompt::{Message, MessageContext, MessageImage},
+};
+use image::{
+    AnimationDecoder, DynamicImage, GenericImageView, ImageReader, RgbaImage,
+    codecs::gif::GifDecoder,
+};
 use reqwest::Client;
 use serde_json::Value;
 use tokio::runtime::Runtime;
-use base64::{engine::general_purpose, Engine as _};
 
 /// **テキストの長さを計算するツール**
 pub struct ImageCaptionerTool {
@@ -16,7 +23,7 @@ impl ImageCaptionerTool {
     pub fn new(model: OpenAIClient) -> Self {
         Self { model }
     }
-    
+
     pub async fn fetch_and_encode_image(url: &str) -> Option<String> {
         // Content-Type ヘッダーで MIME タイプとサイズを判定
         let client = Client::new();
@@ -52,8 +59,10 @@ impl ImageCaptionerTool {
             DynamicImage::ImageRgba8(buf)
         } else {
             let adyn = ImageReader::new(Cursor::new(&bytes))
-                .with_guessed_format().ok()?
-                .decode().ok()?;
+                .with_guessed_format()
+                .ok()?
+                .decode()
+                .ok()?;
             // 透過があれば白背景に合成
             if adyn.color().has_alpha() {
                 let (w, h) = adyn.dimensions();
@@ -71,7 +80,7 @@ impl ImageCaptionerTool {
                 adyn
             }
         };
-    
+
         // 解像度を調整（長辺>2000なら縮小、短辺<512なら拡大）
         let (w, h) = img.dimensions();
         let mut img = img;
@@ -106,8 +115,12 @@ impl ImageCaptionerTool {
         }
         // PNG に再エンコード→data URL
         let mut buf = Vec::new();
-        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png).ok()?;
-        Some(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buf)))
+        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
+            .ok()?;
+        Some(format!(
+            "data:image/png;base64,{}",
+            general_purpose::STANDARD.encode(&buf)
+        ))
     }
 }
 
@@ -142,10 +155,12 @@ impl Tool for ImageCaptionerTool {
     }
     fn run(&self, args: Value) -> Result<String, String> {
         // JSONから"url"キーを取得して String 化
-        let url = args["url"].as_str()
+        let url = args["url"]
+            .as_str()
             .ok_or_else(|| "Missing 'url' parameter".to_string())?
             .to_string();
-        let query = args["query"].as_str()
+        let query = args["query"]
+            .as_str()
             .ok_or_else(|| "Missing 'query' parameter".to_string())?
             .to_string();
 
@@ -157,24 +172,25 @@ impl Tool for ImageCaptionerTool {
             let rt = Runtime::new().expect("Failed to create runtime");
 
             // 画像を取得してエンコード
-            let data_url = rt.block_on(async {
-                Self::fetch_and_encode_image(&url).await
-            }).ok_or_else(|| "Failed to fetch and encode image".to_string())?;
+            let data_url = rt
+                .block_on(async { Self::fetch_and_encode_image(&url).await })
+                .ok_or_else(|| "Failed to fetch and encode image".to_string())?;
 
-            let messages = VecDeque::from(vec![
-                Message::User {
-                    name: Some("observer".to_string()),
-                    content: vec![
-                        MessageContext::Text(query.clone()),
-                        MessageContext::Image(MessageImage { url: data_url, detail: None }),
-                    ],
-                }
-            ]);
+            let messages = VecDeque::from(vec![Message::User {
+                name: Some("observer".to_string()),
+                content: vec![
+                    MessageContext::Text(query.clone()),
+                    MessageContext::Image(MessageImage {
+                        url: data_url,
+                        detail: None,
+                    }),
+                ],
+            }]);
 
             // モデルに投げる
-            let res = rt.block_on(async {
-                model.send(&messages, None).await
-            }).map_err(|_| "Failed to generate caption".to_string())?;
+            let res = rt
+                .block_on(async { model.send(&messages, None).await })
+                .map_err(|_| "Failed to generate caption".to_string())?;
 
             // レスポンス解析
             let caption = res

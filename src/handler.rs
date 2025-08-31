@@ -15,9 +15,12 @@ use serenity::{
     async_trait,
     prelude::EventHandler,
 };
-use tokio::time;
 use std::time::Duration;
-use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tokio::time;
 
 use observer::prefix::{ADMIN_USERS, RATE_CP, SEC_PER_RATE};
 
@@ -85,13 +88,16 @@ impl Handler {
 
         // 使用モデルの取り出し
         let user_id = message.user_id.clone();
-        let mut user_conf = self.user_configs.entry(user_id.clone()).or_insert_with(PerUserConfig::default);
-        
+        let mut user_conf = self
+            .user_configs
+            .entry(user_id.clone())
+            .or_insert_with(PerUserConfig::default);
+
         let model = user_conf.model.clone();
         let model_cost = model.to_sec_per_rate() as u64; // モデルのレート使用量
         let sec_per_rate = *SEC_PER_RATE as u64; // レートの回復時間
         let cp = *RATE_CP as u64; // レートの許容量
-        
+
         // レートリミットの計算
         let limit_line = sec_per_rate * cp;
         let add_line = model_cost * sec_per_rate;
@@ -101,7 +107,10 @@ impl Handler {
             .as_secs();
         let mut user_line = user_conf.rate_limit;
         if user_line > time_stamp + limit_line {
-            return format!("Err: rate limit - try again after <t:{}:R>", (user_line - limit_line));
+            return format!(
+                "Err: rate limit - try again after <t:{}:R>",
+                (user_line - limit_line)
+            );
         }
         if user_line == 0 {
             // リミットレスアカウント
@@ -129,10 +138,11 @@ impl Handler {
         });
 
         // AIに質問、タイムアウトを設定
-        let answer_text = match time::timeout(TIMEOUT, state.reasoning(ctx, msg, message, model)).await {
-            Ok(answer) => answer,
-            Err(_) => "Err: timeout".to_string(),
-        };
+        let answer_text =
+            match time::timeout(TIMEOUT, state.reasoning(ctx, msg, message, model)).await {
+                Ok(answer) => answer,
+                Err(_) => "Err: timeout".to_string(),
+            };
         typing_task.abort();
         answer_text
     }
@@ -207,7 +217,10 @@ impl Handler {
         match serde_json::to_string_pretty(&conf_map) {
             Ok(json_str) => {
                 if let Err(e) = std::fs::write(json_path, json_str) {
-                    error!("Failed to write channel configuration to {}: {:?}", json_path, e);
+                    error!(
+                        "Failed to write channel configuration to {}: {:?}",
+                        json_path, e
+                    );
                 } else {
                     info!("Channel configuration saved to {}", json_path);
                 }
@@ -250,12 +263,8 @@ impl EventHandler for Handler {
         }
 
         // 画像ファイル URL をフィルタして取得
-        let attachment_urls: Vec<String> = msg
-            .attachments
-            .iter()
-            .map(|att| att.url.clone())
-            .collect();
-
+        let attachment_urls: Vec<String> =
+            msg.attachments.iter().map(|att| att.url.clone()).collect();
 
         let state = self.get_or_create_channel_state(msg.channel_id).await;
 
@@ -263,7 +272,14 @@ impl EventHandler for Handler {
             content: msg.content.clone(),
             name: msg.author.name.clone(),
             message_id: msg.id.to_string(),
-            reply_msg: msg.referenced_message.as_ref().map(|m| m.content.clone() + &m.attachments.iter().map(|att| att.url.clone()).collect::<Vec<String>>().join(", ")),
+            reply_msg: msg.referenced_message.as_ref().map(|m| {
+                m.content.clone()
+                    + &m.attachments
+                        .iter()
+                        .map(|att| att.url.clone())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+            }),
             user_id: msg.author.id.to_string(),
             attached_files: attachment_urls,
         };
@@ -275,14 +291,16 @@ impl EventHandler for Handler {
         if is_mentioned {
             // Add the message to state before reasoning
             state.add_message(message.clone()).await;
-            let answer_text = self.handle_mentioned_message(&ctx, &msg, state, message).await;
-            self.send_split_message(&ctx, msg.channel_id, answer_text).await;
+            let answer_text = self
+                .handle_mentioned_message(&ctx, &msg, state, message)
+                .await;
+            self.send_split_message(&ctx, msg.channel_id, answer_text)
+                .await;
         } else {
             state.add_message(message).await;
         }
     }
 
-    
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::Command(command) = interaction {
             match command.data.name.as_str() {
@@ -298,7 +316,7 @@ impl EventHandler for Handler {
                     let latency = start.elapsed().as_millis();
                     let edit = EditInteractionResponse::new()
                         .content(format!("Pong! latency: {} ms", latency));
-                    
+
                     if let Err(why) = command.edit_response(&ctx.http, edit).await {
                         error!("Failed to edit ping response - {:?}", why);
                     }
@@ -315,8 +333,8 @@ impl EventHandler for Handler {
 
                     state.clear_prompt().await;
 
-                    let response_data = CreateInteractionResponseMessage::new()
-                    .content("reset brain");
+                    let response_data =
+                        CreateInteractionResponseMessage::new().content("reset brain");
 
                     let response = CreateInteractionResponse::Message(response_data);
 
@@ -330,7 +348,7 @@ impl EventHandler for Handler {
                     if let Some(mut ch_conf) = self.channels_conf.get_mut(&channel_id) {
                         if ch_conf.enable {
                             let response_data = CreateInteractionResponseMessage::new()
-                            .content("Info: AI is already enabled");
+                                .content("Info: AI is already enabled");
 
                             let response = CreateInteractionResponse::Message(response_data);
 
@@ -342,7 +360,7 @@ impl EventHandler for Handler {
                             ch_conf.enable = true;
 
                             let response_data = CreateInteractionResponseMessage::new()
-                            .content("Info: AI is enabled");
+                                .content("Info: AI is enabled");
 
                             let response = CreateInteractionResponse::Message(response_data);
 
@@ -352,9 +370,10 @@ impl EventHandler for Handler {
                             self.save_ch_conf();
                         }
                     } else {
-                        self.channels_conf.insert(channel_id, ChConf { enable: true });
-                        let response_data = CreateInteractionResponseMessage::new()
-                        .content("Info: AI is enabled");
+                        self.channels_conf
+                            .insert(channel_id, ChConf { enable: true });
+                        let response_data =
+                            CreateInteractionResponseMessage::new().content("Info: AI is enabled");
                         let response = CreateInteractionResponse::Message(response_data);
                         if let Err(why) = command.create_response(&ctx.http, response).await {
                             error!("Failed to respond to enable - {:?}", why);
@@ -368,7 +387,7 @@ impl EventHandler for Handler {
                     if let Some(mut ch_conf) = self.channels_conf.get_mut(&channel_id) {
                         if !ch_conf.enable {
                             let response_data = CreateInteractionResponseMessage::new()
-                            .content("Info: AI is already disabled");
+                                .content("Info: AI is already disabled");
 
                             let response = CreateInteractionResponse::Message(response_data);
 
@@ -380,7 +399,7 @@ impl EventHandler for Handler {
                             ch_conf.enable = false;
 
                             let response_data = CreateInteractionResponseMessage::new()
-                            .content("Info: AI is disabled");
+                                .content("Info: AI is disabled");
 
                             let response = CreateInteractionResponse::Message(response_data);
 
@@ -390,9 +409,10 @@ impl EventHandler for Handler {
                             self.save_ch_conf();
                         }
                     } else {
-                        self.channels_conf.insert(channel_id, ChConf { enable: false });
-                        let response_data = CreateInteractionResponseMessage::new()
-                        .content("Info: AI is disabled");
+                        self.channels_conf
+                            .insert(channel_id, ChConf { enable: false });
+                        let response_data =
+                            CreateInteractionResponseMessage::new().content("Info: AI is disabled");
                         let response = CreateInteractionResponse::Message(response_data);
                         if let Err(why) = command.create_response(&ctx.http, response).await {
                             error!("Failed to respond to disable - {:?}", why);
@@ -402,7 +422,10 @@ impl EventHandler for Handler {
                 }
 
                 "collect_history" => {
-                    let entry_num = command.data.options.get(0)
+                    let entry_num = command
+                        .data
+                        .options
+                        .get(0)
                         .and_then(|opt| opt.value.as_i64())
                         .map(|val| val as usize)
                         .unwrap_or(32);
@@ -413,10 +436,11 @@ impl EventHandler for Handler {
                         self.channels.insert(command.channel_id, new_state.clone());
                         new_state
                     };
-                    
+
                     use serenity::futures::StreamExt;
                     use std::pin::pin;
-                    let mut messages_stream = pin!(command.channel_id.messages_iter(&ctx.http).take(entry_num));
+                    let mut messages_stream =
+                        pin!(command.channel_id.messages_iter(&ctx.http).take(entry_num));
                     let mut messages_vec = Vec::new();
                     while let Some(message_result) = messages_stream.next().await {
                         if let Ok(message) = message_result {
@@ -424,18 +448,25 @@ impl EventHandler for Handler {
                         }
                     }
                     for message in messages_vec.into_iter().rev() {
-                        state.add_message(InputMessage {
-                            content: message.content.clone(),
-                            name: message.author.name.clone(),
-                            message_id: message.id.to_string(),
-                            reply_msg: message.referenced_message.as_ref().map(|m| m.content.clone()),
-                            user_id: message.author.id.to_string(),
-                            attached_files: Vec::new(),
-                        }).await;
+                        state
+                            .add_message(InputMessage {
+                                content: message.content.clone(),
+                                name: message.author.name.clone(),
+                                message_id: message.id.to_string(),
+                                reply_msg: message
+                                    .referenced_message
+                                    .as_ref()
+                                    .map(|m| m.content.clone()),
+                                user_id: message.author.id.to_string(),
+                                attached_files: Vec::new(),
+                            })
+                            .await;
                     }
-                    
-                    let response_data = CreateInteractionResponseMessage::new()
-                        .content(format!("Info: Complete collecting history ({} entries)", entry_num));
+
+                    let response_data = CreateInteractionResponseMessage::new().content(format!(
+                        "Info: Complete collecting history ({} entries)",
+                        entry_num
+                    ));
 
                     let response = CreateInteractionResponse::Message(response_data);
 
@@ -473,15 +504,20 @@ impl EventHandler for Handler {
                         }
                     };
                     // ユーザーidから名前を取得
-                    let user_data = UserId::from_str(&target_user_id).unwrap().to_user(&ctx.http).await.unwrap_or_default();
+                    let user_data = UserId::from_str(&target_user_id)
+                        .unwrap()
+                        .to_user(&ctx.http)
+                        .await
+                        .unwrap_or_default();
                     let target_user_name = user_data.name.clone();
 
-                    let mut user_conf = self.user_configs.entry(target_user_id.clone()).or_insert(
-                        PerUserConfig {
-                            rate_limit: 0, // デフォルトは無制限
-                            model: AIModel::default(), // デフォルトモデルを使用
-                        }
-                    );
+                    let mut user_conf =
+                        self.user_configs
+                            .entry(target_user_id.clone())
+                            .or_insert(PerUserConfig {
+                                rate_limit: 0,             // デフォルトは無制限
+                                model: AIModel::default(), // デフォルトモデルを使用
+                            });
 
                     // レートリミットを設定
                     let timestamp = SystemTime::now()
@@ -496,23 +532,31 @@ impl EventHandler for Handler {
                         if user_conf.rate_limit < timestamp {
                             user_conf.rate_limit = timestamp;
                         }
-                        let sec_per_rate = *SEC_PER_RATE as u64; 
+                        let sec_per_rate = *SEC_PER_RATE as u64;
                         user_conf.rate_limit += user_line as u64 * sec_per_rate;
                     }
                     let message = if user_conf.rate_limit == 0 {
-                        format!("Info: {} rate limit line set to unlimited", target_user_name).to_string()
+                        format!(
+                            "Info: {} rate limit line set to unlimited",
+                            target_user_name
+                        )
+                        .to_string()
                     } else {
                         let sec_per_rate = *SEC_PER_RATE as u64; // レートの回復時間
                         let cp = *RATE_CP as u64; // レートの許容量
-                        
+
                         // レートリミットの計算
                         let limit_line = sec_per_rate * cp;
-                        let now_rate = ((timestamp + limit_line) as i64 - user_conf.rate_limit as i64) / sec_per_rate as i64;
-                        let next_time =  user_conf.rate_limit - limit_line;
-                        format!("Info: rate limit forcibly consumed. Now {}'s rate is {} (relative: <t:{}:R>)", target_user_name, now_rate, next_time)
+                        let now_rate = ((timestamp + limit_line) as i64
+                            - user_conf.rate_limit as i64)
+                            / sec_per_rate as i64;
+                        let next_time = user_conf.rate_limit - limit_line;
+                        format!(
+                            "Info: rate limit forcibly consumed. Now {}'s rate is {} (relative: <t:{}:R>)",
+                            target_user_name, now_rate, next_time
+                        )
                     };
-                    let response_data = CreateInteractionResponseMessage::new()
-                        .content(message);
+                    let response_data = CreateInteractionResponseMessage::new().content(message);
 
                     let response = CreateInteractionResponse::Message(response_data);
 
@@ -524,7 +568,10 @@ impl EventHandler for Handler {
                 "model" => {
                     let command_user_id = command.user.id.to_string();
                     let default_model_name = AIModel::default().to_model_name();
-                    let model_name = command.data.options[0].value.as_str().unwrap_or(&default_model_name);
+                    let model_name = command.data.options[0]
+                        .value
+                        .as_str()
+                        .unwrap_or(&default_model_name);
                     let model = AIModel::from_model_name(model_name);
                     match model {
                         Err(e_str) => {
@@ -536,30 +583,29 @@ impl EventHandler for Handler {
                                 error!("Failed to respond to model - {:?}", why);
                             }
                             return;
-                        },
+                        }
                         Ok(model) => {
-                            let mut user_conf = self.user_configs.entry(command_user_id.clone()).or_insert(
-                                PerUserConfig {
-                                    rate_limit: 0, // デフォルトは無制限
+                            let mut user_conf = self
+                                .user_configs
+                                .entry(command_user_id.clone())
+                                .or_insert(PerUserConfig {
+                                    rate_limit: 0,             // デフォルトは無制限
                                     model: AIModel::default(), // デフォルトモデルを使用
-                                }
-                            );
+                                });
                             user_conf.model = model.clone();
                             let response_data = CreateInteractionResponseMessage::new()
                                 .content(format!("Info: Model set to {}", model.to_model_name()))
                                 .ephemeral(true);
-    
+
                             let response = CreateInteractionResponse::Message(response_data);
-        
+
                             if let Err(why) = command.create_response(&ctx.http, response).await {
                                 error!("Failed to respond to model - {:?}", why);
                             }
-                            return ;
+                            return;
                         }
                     }
-
                 }
-
 
                 _ => warn!("Unknown command: {}", command.data.name),
             }
@@ -571,33 +617,36 @@ impl EventHandler for Handler {
         info!("{} is connected!", ready.user.name);
 
         // グローバルコマンドを登録
-        Command::set_global_commands(&ctx.http, vec![
-            CreateCommand::new("ping")
-                .description("Pong! 🏓"),
-            CreateCommand::new("reset")
-                .description("reset brain"),
-
-            CreateCommand::new("enable")
-                .description("enable AI"),
-
-            CreateCommand::new("disable")
-                .description("disable AI"),
-
-            CreateCommand::new("collect_history")
-                .description("collect message history")
-                .add_option(
-                    CreateCommandOption::new(CommandOptionType::Integer, "entry_num", "number of entries to collect")
+        Command::set_global_commands(
+            &ctx.http,
+            vec![
+                CreateCommand::new("ping").description("Pong! 🏓"),
+                CreateCommand::new("reset").description("reset brain"),
+                CreateCommand::new("enable").description("enable AI"),
+                CreateCommand::new("disable").description("disable AI"),
+                CreateCommand::new("collect_history")
+                    .description("collect message history")
+                    .add_option(
+                        CreateCommandOption::new(
+                            CommandOptionType::Integer,
+                            "entry_num",
+                            "number of entries to collect",
+                        )
                         .max_int_value(128)
-                        .min_int_value(1)
-                ),
-            CreateCommand::new("rate_conf")
-                .description("modify user rate")
-                .add_option(
-                    CreateCommandOption::new(CommandOptionType::User, "user", "user to modify")
-                        .required(true)
-                )
-                .add_option(
-                    CreateCommandOption::new(CommandOptionType::Integer, "user_line", "0 for unlimited")
+                        .min_int_value(1),
+                    ),
+                CreateCommand::new("rate_conf")
+                    .description("modify user rate")
+                    .add_option(
+                        CreateCommandOption::new(CommandOptionType::User, "user", "user to modify")
+                            .required(true),
+                    )
+                    .add_option(
+                        CreateCommandOption::new(
+                            CommandOptionType::Integer,
+                            "user_line",
+                            "0 for unlimited",
+                        )
                         .required(true)
                         .add_int_choice("reset", -1)
                         .add_int_choice("Unlimited", 0)
@@ -617,21 +666,40 @@ impl EventHandler for Handler {
                         .add_int_choice("sub 8192", 8192)
                         .add_int_choice("sub 16384", 16384)
                         .add_int_choice("sub 32768", 32768)
-                        .add_int_choice("sub 65536", 65536)
-
-                ),
+                        .add_int_choice("sub 65536", 65536),
+                    ),
                 CreateCommand::new("model")
-                .description("set using model")
-                .add_option(
-                    CreateCommandOption::new(CommandOptionType::String, "model_name", "name of model to use")
+                    .description("set using model")
+                    .add_option(
+                        CreateCommandOption::new(
+                            CommandOptionType::String,
+                            "model_name",
+                            "name of model to use",
+                        )
                         .required(true)
-                        .add_string_choice(AIModel::MO4Mini.to_model_discription(), AIModel::MO4Mini.to_model_name())
-                        .add_string_choice(AIModel::MO3.to_model_discription(), AIModel::MO3.to_model_name())
-                        .add_string_choice(AIModel::M5Nano.to_model_discription(), AIModel::M5Nano.to_model_name())
-                        .add_string_choice(AIModel::M5Mini.to_model_discription(), AIModel::M5Mini.to_model_name())
-                        .add_string_choice(AIModel::M5.to_model_discription(), AIModel::M5.to_model_name())
-                )
-            ])
+                        .add_string_choice(
+                            AIModel::MO4Mini.to_model_discription(),
+                            AIModel::MO4Mini.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::MO3.to_model_discription(),
+                            AIModel::MO3.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::M5Nano.to_model_discription(),
+                            AIModel::M5Nano.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::M5Mini.to_model_discription(),
+                            AIModel::M5Mini.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::M5.to_model_discription(),
+                            AIModel::M5.to_model_name(),
+                        ),
+                    ),
+            ],
+        )
         .await
         .expect("Failed to create global command");
     }

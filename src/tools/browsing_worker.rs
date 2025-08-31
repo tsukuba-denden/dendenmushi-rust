@@ -1,9 +1,13 @@
-use call_agent::chat::{client::OpenAIClient, function::Tool, prompt::{Message, MessageContext}};
+use super::web_scraper::Browser as WebBrowser;
+use call_agent::chat::{
+    client::OpenAIClient,
+    function::Tool,
+    prompt::{Message, MessageContext},
+};
 use log::info;
+use regex::Regex;
 use serde_json::Value;
 use tokio::runtime::Runtime;
-use regex::Regex;
-use super::web_scraper::Browser as WebBrowser;
 
 /// **テキストの長さを計算するツール**
 pub struct BrowsingWorker {
@@ -43,7 +47,8 @@ impl Tool for BrowsingWorker {
     }
     fn run(&self, args: Value) -> Result<String, String> {
         info!("BrowsingWorker::run called with args: {:?}", args);
-        let query = args["query"].as_str()
+        let query = args["query"]
+            .as_str()
             .ok_or_else(|| "Missing 'query' parameter".to_string())?
             .to_string();
 
@@ -57,7 +62,8 @@ impl Tool for BrowsingWorker {
             let result = std::thread::spawn(move || -> Result<String, String> {
                 let rt = Runtime::new().expect("Failed to create runtime");
                 let scraper = WebBrowser::new();
-                let data = rt.block_on(scraper.scrape_reqwest(&url, "p, h1, h2, h3, a"))
+                let data = rt
+                    .block_on(scraper.scrape_reqwest(&url, "p, h1, h2, h3, a"))
                     .map_err(|e| format!("Scrape error: {}", e))?;
                 let summary = WebBrowser::compress_content(data, 0, 2000);
                 Ok(format!("{}\n\nURL: {}", summary, url))
@@ -83,7 +89,7 @@ impl Tool for BrowsingWorker {
         let result = std::thread::spawn(move || -> Result<String, String> {
             let rt = Runtime::new().expect("Failed to create runtime");
             let messages = Vec::from(vec![
-                Message::System { 
+                Message::System {
                     name: Some("owner".to_string()), 
                     content: "You are an excellent AI assistant who searches for web pages regarding the request content and faithfully summarizes the entire content of that page. Absolutely use the internet to research and compile information.Also, be sure to indicate the source (URL).".to_string() 
                 },
@@ -148,7 +154,10 @@ fn extract_first_url(text: &str) -> Option<String> {
 // URLが含まれない場合の検索処理（Bing）
 fn search_and_summarize(query: &str) -> Result<String, String> {
     let query = query.to_string(); // Clone the query string to own it
-    let search_url = format!("https://www.bing.com/search?q={}", urlencoding::encode(&query));
+    let search_url = format!(
+        "https://www.bing.com/search?q={}",
+        urlencoding::encode(&query)
+    );
     if !WebBrowser::is_safe_url(&search_url) {
         return Err("Are you try hacking me?".to_string());
     }
@@ -166,7 +175,11 @@ fn search_and_summarize(query: &str) -> Result<String, String> {
             .into_iter()
             .filter_map(|it| match it.link {
                 Some(link) if link.starts_with("http") && !link.contains("bing.com") => {
-                    let title = if it.text.trim().is_empty() { link.clone() } else { it.text };
+                    let title = if it.text.trim().is_empty() {
+                        link.clone()
+                    } else {
+                        it.text
+                    };
                     Some((title, link))
                 }
                 _ => None,
@@ -185,17 +198,32 @@ fn search_and_summarize(query: &str) -> Result<String, String> {
             let brief = top_data
                 .map(|d| WebBrowser::compress_content(d, 0, 800))
                 .unwrap_or_else(|| String::from("(内容の抽出に失敗しました)"));
-            format!("検索: {}\n上位: {}\n\n抜粋:\n{}\n\nSources:\n{}\n{}",
+            format!(
+                "検索: {}\n上位: {}\n\n抜粋:\n{}\n\nSources:\n{}\n{}",
                 query,
                 top_title,
                 brief,
                 top_link,
-                links.iter().skip(1).take(4).map(|(_, l)| l.as_str()).collect::<Vec<_>>().join("\n")
+                links
+                    .iter()
+                    .skip(1)
+                    .take(4)
+                    .map(|(_, l)| l.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
             )
         } else {
             // リンクのみ列挙
-            let list = links.iter().take(5).map(|(t, l)| format!("- {}\n  {}", t, l)).collect::<Vec<_>>().join("\n");
-            format!("検索: {}\nリンク:\n{}\n\nSearch URL: {}", query, list, search_url)
+            let list = links
+                .iter()
+                .take(5)
+                .map(|(t, l)| format!("- {}\n  {}", t, l))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "検索: {}\nリンク:\n{}\n\nSearch URL: {}",
+                query, list, search_url
+            )
         };
 
         Ok(summary)

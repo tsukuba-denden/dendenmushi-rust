@@ -1,22 +1,38 @@
-use std::sync::Arc;
 use dashmap::DashMap;
+use std::sync::Arc;
 mod agent;
 mod handler;
 
 use handler::Handler;
 
-use call_agent::chat::{api::{UserLocation, WebSearchOptions}, client::{ModelConfig, OpenAIClient}};
-use observer::{prefix::{ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL, ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL, MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME}, tools::{browsing_worker::BrowsingWorker, get_time::GetTime, image_captioner::ImageCaptionerTool, memory::MemoryTool, web_deploy::WebDeploy, web_scraper::Browser}}; // use tools::memory::MemoryTool;
+use call_agent::chat::{
+    api::{UserLocation, WebSearchOptions},
+    client::{ModelConfig, OpenAIClient},
+};
+use observer::{
+    prefix::{
+        ASSISTANT_NAME, DISCORD_TOKEN, ENABLE_BROWSER_TOOL, ENABLE_GET_TIME_TOOL,
+        ENABLE_IMAGE_CAPTIONER_TOOL, ENABLE_MEMORY_TOOL, ENABLE_WEB_DEPLOY_TOOL,
+        MAIN_MODEL_API_KEY, MAIN_MODEL_ENDPOINT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME,
+    },
+    tools::{
+        browsing_worker::BrowsingWorker, get_time::GetTime, image_captioner::ImageCaptionerTool,
+        memory::MemoryTool, web_deploy::WebDeploy, web_scraper::Browser,
+    },
+}; // use tools::memory::MemoryTool;
 
-use serenity::model::prelude::*;
-use serenity::prelude::*;
 use log::error;
 use regex::Regex;
+use serenity::model::prelude::*;
+use serenity::prelude::*;
 
+use base64::{Engine as _, engine::general_purpose};
+use image::{
+    AnimationDecoder, DynamicImage, GenericImageView, ImageFormat, ImageReader, RgbaImage,
+    codecs::gif::GifDecoder,
+};
 use reqwest::Client as ReqwestClient;
 use std::io::Cursor;
-use image::{codecs::gif::GifDecoder, ImageReader, AnimationDecoder, DynamicImage, GenericImageView, ImageFormat, RgbaImage};
-use base64::{engine::general_purpose, Engine as _};
 
 async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
     println!("fetch_and_encode_images: {:?}", urls);
@@ -41,24 +57,38 @@ async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
                         .as_str()
                         .to_lowercase();
                     let mime = match ext.as_str() {
-                        "png"  => "image/png",
+                        "png" => "image/png",
                         "jpg" | "jpeg" => "image/jpeg",
-                        "gif"  => "image/gif",
+                        "gif" => "image/gif",
                         "webp" => "image/webp",
-                        _      => "application/octet-stream",
+                        _ => "application/octet-stream",
                     };
-                    out.push(format!("data:{};base64,{}", mime, general_purpose::STANDARD.encode(&bytes)));
+                    out.push(format!(
+                        "data:{};base64,{}",
+                        mime,
+                        general_purpose::STANDARD.encode(&bytes)
+                    ));
                 }
             }
             continue;
         }
-        let ext = ext_re.captures(url).and_then(|c| c.get(1)).unwrap().as_str().to_lowercase();
+        let ext = ext_re
+            .captures(url)
+            .and_then(|c| c.get(1))
+            .unwrap()
+            .as_str()
+            .to_lowercase();
         // HEAD でサイズチェック
-        let len = client.head(url).send().await
+        let len = client
+            .head(url)
+            .send()
+            .await
             .ok()
-            .and_then(|r| r.headers()
-                .get(reqwest::header::CONTENT_LENGTH)
-                .and_then(|v| v.to_str().ok()?.parse().ok()))
+            .and_then(|r| {
+                r.headers()
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok()?.parse().ok())
+            })
             .unwrap_or(0);
         if len == 0 || len > 20 * 1024 * 1024 || total_bytes + len > 50 * 1024 * 1024 {
             continue;
@@ -79,13 +109,13 @@ async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
                     Err(_) => continue,
                 };
                 let mut frames = decoder.into_frames();
-        
+
                 // Frame を取り出し
                 let frame = match frames.next() {
                     Some(Ok(frame)) => frame,
                     _ => continue,
                 };
-        
+
                 // Frame をバッファ（RgbaImage）に変換
                 let buf: RgbaImage = frame.into_buffer();
                 DynamicImage::ImageRgba8(buf)
@@ -156,13 +186,14 @@ async fn fetch_and_encode_images(urls: &[String]) -> Vec<String> {
             continue;
         }
         total_bytes += len;
-        out.push(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&buf)));
+        out.push(format!(
+            "data:image/png;base64,{}",
+            general_purpose::STANDARD.encode(&buf)
+        ));
     }
 
     out
 }
-
-
 
 #[tokio::main]
 async fn main() {
@@ -199,11 +230,7 @@ async fn main() {
     };
 
     // 基本となる OpenAIClient を生成し、ツールを定義
-    let mut base_client = OpenAIClient::new(
-        *MAIN_MODEL_ENDPOINT,
-        Some(*MAIN_MODEL_API_KEY),
-    );
-
+    let mut base_client = OpenAIClient::new(*MAIN_MODEL_ENDPOINT, Some(*MAIN_MODEL_API_KEY));
 
     if *ENABLE_BROWSER_TOOL {
         base_client.def_tool(Arc::new(Browser::new()));
@@ -220,64 +247,51 @@ async fn main() {
         base_client.def_tool(web_deploy);
     }
     if *ENABLE_IMAGE_CAPTIONER_TOOL {
-        base_client.def_tool(Arc::new(
-            ImageCaptionerTool::new({
-
-                let mut c = OpenAIClient::new(
-                    *MAIN_MODEL_ENDPOINT,
-                    Some(*MAIN_MODEL_API_KEY)
-                );
-                c.set_model_config(&ModelConfig {
-                    model: "gemini-2.5-flash".to_string(),
-                    model_name: Some("image_captioner".to_string()),
-                    parallel_tool_calls: None,
-                    temperature: None,
-                    max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                    reasoning_effort: Some("low".to_string()),
-                    presence_penalty: None,
-                    strict: Some(false),
-                    top_p: Some(1.0),
-                    web_search_options: None,
-                });
-                c
-            })
-        ));
-    }
-    base_client.def_tool(Arc::new(
-        BrowsingWorker::new({
-            let mut c = OpenAIClient::new(
-                *MAIN_MODEL_ENDPOINT,
-                Some(*MAIN_MODEL_API_KEY)
-            );
+        base_client.def_tool(Arc::new(ImageCaptionerTool::new({
+            let mut c = OpenAIClient::new(*MAIN_MODEL_ENDPOINT, Some(*MAIN_MODEL_API_KEY));
             c.set_model_config(&ModelConfig {
-                model: "gemini-1.5-flash".to_string(),
-                model_name: Some("browsing_worker".to_string()),
+                model: "gemini-2.5-flash".to_string(),
+                model_name: Some("image_captioner".to_string()),
                 parallel_tool_calls: None,
                 temperature: None,
                 max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
-                reasoning_effort: None,
+                reasoning_effort: Some("low".to_string()),
                 presence_penalty: None,
                 strict: Some(false),
-                top_p: None,
-                web_search_options: Some(WebSearchOptions {
-                    search_context_size: None,
-                    user_location: UserLocation {
-                        country: Some("JP".to_string()),
-                        region: None,
-                        city: None,
-                        timezone: None,
-                    }
-                })
+                top_p: Some(1.0),
+                web_search_options: None,
             });
             c
-        })
-        )
-    );
+        })));
+    }
+    base_client.def_tool(Arc::new(BrowsingWorker::new({
+        let mut c = OpenAIClient::new(*MAIN_MODEL_ENDPOINT, Some(*MAIN_MODEL_API_KEY));
+        c.set_model_config(&ModelConfig {
+            model: "gemini-1.5-flash".to_string(),
+            model_name: Some("browsing_worker".to_string()),
+            parallel_tool_calls: None,
+            temperature: None,
+            max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+            reasoning_effort: None,
+            presence_penalty: None,
+            strict: Some(false),
+            top_p: None,
+            web_search_options: Some(WebSearchOptions {
+                search_context_size: None,
+                user_location: UserLocation {
+                    country: Some("JP".to_string()),
+                    region: None,
+                    city: None,
+                    timezone: None,
+                },
+            }),
+        });
+        c
+    })));
     base_client.set_model_config(&conf);
     let base_client = Arc::new(base_client);
 
     let channels = DashMap::new();
-
 
     // Bot のインテント設定（MESSAGE_CONTENT を含む）
     let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;

@@ -1,13 +1,13 @@
 use call_agent::chat::function::Tool;
+use chrono::{DateTime, Local};
+use log::error;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use chrono::{DateTime, Local};
-use log::error;
 
 const MEMORY_DIR: &str = "memory";
 const MAX_KEYS: usize = 100;
@@ -72,7 +72,10 @@ impl MemoryTool {
     pub fn add_memory(&self, key: &str, value: &str) -> Result<(), String> {
         let mut mem = self.memory.lock().map_err(|_| "Lock error".to_string())?;
         if !mem.contains_key(key) && mem.len() >= MAX_KEYS {
-            return Err(format!("Cannot add new key. Maximum {} keys reached.", MAX_KEYS));
+            return Err(format!(
+                "Cannot add new key. Maximum {} keys reached.",
+                MAX_KEYS
+            ));
         }
         mem.insert(key.to_string(), value.to_string());
         Self::save_to_file(key, value)
@@ -87,7 +90,10 @@ impl MemoryTool {
         } else {
             // 新規の場合でも、MAX_KEYS チェックを行う
             if mem.len() >= MAX_KEYS {
-                return Err(format!("Cannot add new key. Maximum {} keys reached.", MAX_KEYS));
+                return Err(format!(
+                    "Cannot add new key. Maximum {} keys reached.",
+                    MAX_KEYS
+                ));
             }
             value.to_string()
         };
@@ -100,10 +106,11 @@ impl MemoryTool {
     pub fn get_memory(&self, key: Option<&str>) -> HashMap<String, String> {
         let mem = self.memory.lock().unwrap();
         match key {
-            Some(k) => mem.iter()
-                          .filter(|(key, _)| key.as_str() == k)
-                          .map(|(k, v)| (k.clone(), v.clone()))
-                          .collect(),
+            Some(k) => mem
+                .iter()
+                .filter(|(key, _)| key.as_str() == k)
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
             None => mem.clone(),
         }
     }
@@ -133,7 +140,9 @@ impl MemoryTool {
                 if let Ok(entries) = fs::read_dir(MEMORY_DIR) {
                     for entry in entries.filter_map(|e| e.ok()) {
                         let path = entry.path();
-                        if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
+                        if path.is_file()
+                            && path.extension().map(|ext| ext == "md").unwrap_or(false)
+                        {
                             if let Err(e) = fs::remove_file(&path) {
                                 error!("Failed to remove file {:?}: {}", path, e);
                             }
@@ -236,55 +245,59 @@ Use 'add' to create or update an entry, 'push' to append to an existing entry, '
     }
 
     fn run(&self, args: serde_json::Value) -> Result<String, String> {
-        let action = args.get("action")
+        let action = args
+            .get("action")
             .and_then(|v| v.as_str())
             .ok_or_else(|| "Missing or invalid 'action' parameter".to_string())?;
 
         match action {
             "add" => {
-                let key = args.get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| "Missing or invalid 'key' parameter for add action".to_string())?;
-                let value = args.get("value")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| "Missing or invalid 'value' parameter for add action".to_string())?;
+                let key = args.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    "Missing or invalid 'key' parameter for add action".to_string()
+                })?;
+                let value = args.get("value").and_then(|v| v.as_str()).ok_or_else(|| {
+                    "Missing or invalid 'value' parameter for add action".to_string()
+                })?;
                 self.add_memory(key, value)?;
                 let response = MemoryResponse {
                     status: "Memory added/updated.".to_string(),
                     memory: None,
                 };
                 serde_json::to_string(&response).map_err(|e| e.to_string())
-            },
+            }
             "push" => {
-                let key = args.get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| "Missing or invalid 'key' parameter for push action".to_string())?;
-                let value = args.get("value")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| "Missing or invalid 'value' parameter for push action".to_string())?;
+                let key = args.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    "Missing or invalid 'key' parameter for push action".to_string()
+                })?;
+                let value = args.get("value").and_then(|v| v.as_str()).ok_or_else(|| {
+                    "Missing or invalid 'value' parameter for push action".to_string()
+                })?;
                 self.push_memory(key, value)?;
                 let response = MemoryResponse {
                     status: format!("Value pushed to key '{}'.", key),
                     memory: None,
                 };
                 serde_json::to_string(&response).map_err(|e| e.to_string())
-            },
+            }
             "get" => {
                 let key = args.get("key").and_then(|v| v.as_str());
                 let mem = self.get_memory(key);
                 let mut mem_with_meta = serde_json::Map::new();
                 for (k, v) in mem.iter() {
-                    mem_with_meta.insert(k.clone(), json!({
-                        "value": v,
-                        "last_modified": Self::get_last_modified(k)
-                    }));
+                    mem_with_meta.insert(
+                        k.clone(),
+                        json!({
+                            "value": v,
+                            "last_modified": Self::get_last_modified(k)
+                        }),
+                    );
                 }
                 let response = MemoryResponse {
                     status: "Memory retrieved.".to_string(),
                     memory: Some(Value::Object(mem_with_meta)),
                 };
                 serde_json::to_string(&response).map_err(|e| e.to_string())
-            },
+            }
             "get_keys" => {
                 let keys = self.get_keys();
                 let response = MemoryResponse {
@@ -292,7 +305,7 @@ Use 'add' to create or update an entry, 'push' to append to an existing entry, '
                     memory: Some(json!(keys)),
                 };
                 serde_json::to_string(&response).map_err(|e| e.to_string())
-            },
+            }
             "clear" => {
                 let key = args.get("key").and_then(|v| v.as_str());
                 self.clear_memory(key);
@@ -305,8 +318,11 @@ Use 'add' to create or update an entry, 'push' to append to an existing entry, '
                     memory: None,
                 };
                 serde_json::to_string(&response).map_err(|e| e.to_string())
-            },
-            _ => Err("Invalid action specified. Use 'add', 'push', 'get', 'get_keys', or 'clear'.".to_string())
+            }
+            _ => Err(
+                "Invalid action specified. Use 'add', 'push', 'get', 'get_keys', or 'clear'."
+                    .to_string(),
+            ),
         }
     }
 }

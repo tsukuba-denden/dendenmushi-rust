@@ -5,7 +5,9 @@ use call_agent::chat::{
     prompt::{Message, MessageContext, MessageImage},
 };
 use log::{debug, info};
-use observer::prefix::{ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME};
+use observer::prefix::{
+    ASK_DEVELOPER_PROMPT, ASSISTANT_NAME, MAX_USE_TOOL_COUNT, MODEL_GENERATE_MAX_TOKENS, MODEL_NAME,
+};
 use regex::Regex;
 use serenity::all::{Context, CreateMessage, MessageFlags};
 use tokio::sync::Mutex;
@@ -64,8 +66,12 @@ impl AIModel {
             AIModel::M5Nano => "gpt-5-nano: late=2 超高速応答".to_string(),
             AIModel::M5Mini => "gpt-5-mini: late=5 高速応答".to_string(),
             AIModel::M5 => "gpt-5: late=20 一般".to_string(),
-            AIModel::Gemini25Flash => "gemini-2.5-flash: Google Gemini 高速・汎用 (Vision/Tool対応)".to_string(),
-            AIModel::Gemini15Flash => "gemini-1.5-flash: 高速マルチモーダル (Vision向け)".to_string(),
+            AIModel::Gemini25Flash => {
+                "gemini-2.5-flash: Google Gemini 高速・汎用 (Vision/Tool対応)".to_string()
+            }
+            AIModel::Gemini15Flash => {
+                "gemini-1.5-flash: 高速マルチモーダル (Vision向け)".to_string()
+            }
             AIModel::Gemini15Pro => "gemini-1.5-pro: 高性能推論".to_string(),
         }
     }
@@ -213,8 +219,7 @@ impl AIModel {
 
 impl Default for AIModel {
     fn default() -> Self {
-        AIModel::from_model_name(*MODEL_NAME)
-            .unwrap_or_else(|_| AIModel::Gemini25Flash) // デフォルトは Gemini
+        AIModel::from_model_name(*MODEL_NAME).unwrap_or_else(|_| AIModel::Gemini25Flash) // デフォルトは Gemini
     }
 }
 

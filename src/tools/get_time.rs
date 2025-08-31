@@ -1,4 +1,3 @@
-
 use call_agent::chat::function::Tool;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
@@ -92,7 +91,10 @@ impl GetTime {
         let utc_now: DateTime<Utc> = Utc::now();
         let local_time = utc_now.with_timezone(tz);
 
-        Ok(format!("The current time in {} ({}) is: {}", country_code, tz, local_time))
+        Ok(format!(
+            "The current time in {} ({}) is: {}",
+            country_code, tz, local_time
+        ))
     }
 }
 
@@ -124,7 +126,8 @@ impl Tool for GetTime {
 
     fn run(&self, args: serde_json::Value) -> Result<String, String> {
         info!("GetTime::run called with args: {:?}", args);
-        let country_code = args.get("country_code")
+        let country_code = args
+            .get("country_code")
             .and_then(|v| v.as_str())
             .ok_or("Missing or invalid 'country_code' parameter".to_string())?;
 

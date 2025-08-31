@@ -25,8 +25,8 @@ use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 // use playwright::Playwright;
-use tokio::{self};
 use std::fmt;
+use tokio::{self};
 
 const MAX_FILE_SIZE: u64 = 5 * 1024 * 1024; // 5MB
 const WHITELIST: [&str; 110] = [
@@ -179,8 +179,8 @@ impl std::error::Error for ScraperError {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScrapedItem {
-    pub text: String,  // 要素内のテキスト
-    pub link: Option<String>,  // リンクの href 属性
+    pub text: String,         // 要素内のテキスト
+    pub link: Option<String>, // リンクの href 属性
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -213,7 +213,9 @@ impl Browser {
         // 5MBを上限とする
         let url = Url::parse(url).map_err(|_| ScraperError::ParseError)?;
 
-        let response = self.client.get(url)
+        let response = self
+            .client
+            .get(url)
             .send()
             .await
             .map_err(|_| ScraperError::NetworkError)?;
@@ -225,14 +227,24 @@ impl Browser {
             }
         }
 
-        let content_type = response.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
-        let response = response.error_for_status().map_err(|_| ScraperError::NetworkError)?;
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        let response = response
+            .error_for_status()
+            .map_err(|_| ScraperError::NetworkError)?;
 
-        let body_bytes = response.bytes().await.map_err(|_| ScraperError::NetworkError)?;
+        let body_bytes = response
+            .bytes()
+            .await
+            .map_err(|_| ScraperError::NetworkError)?;
         if body_bytes.len() > MAX_FILE_SIZE as usize {
             return Err(ScraperError::FileTooLargeError);
         }
-    
+
         // UTF-8 でデコードできない場合はエラーを返す
         let body = String::from_utf8(body_bytes.to_vec()).map_err(|_| ScraperError::ParseError)?;
 
@@ -244,30 +256,32 @@ impl Browser {
                         link: None,
                     }],
                 });
-            }    
+            }
             return Err(ScraperError::ParseError);
         }
-        
+
         let document = Html::parse_document(&body);
         let selector = Selector::parse(selector_str).map_err(|_| ScraperError::ParseError)?;
 
         let items: Vec<ScrapedItem> = document
             .select(&selector)
             .map(|element| {
-            let raw_text = element.text().collect::<Vec<_>>().join(" ");
-            let text = raw_text.split_whitespace().collect::<Vec<_>>().join(" ");
+                let raw_text = element.text().collect::<Vec<_>>().join(" ");
+                let text = raw_text.split_whitespace().collect::<Vec<_>>().join(" ");
 
-            let href = element.value().attr("href").map(|s| s.to_string());
-            let link = element.value().attr("src").map(|s| s.to_string());
+                let href = element.value().attr("href").map(|s| s.to_string());
+                let link = element.value().attr("src").map(|s| s.to_string());
 
-            ScrapedItem { text, link: href.or(link) }
+                ScrapedItem {
+                    text,
+                    link: href.or(link),
+                }
             })
             .filter(|item| !item.text.is_empty() || item.link.is_some())
             .collect();
 
         Ok(ScrapedData { items })
     }
-
 
     /// Playwright を使った JS レンダリング対応スクレイピング
     // pub async fn scrape_playwright(
@@ -295,51 +309,50 @@ impl Browser {
 
     pub fn compress_content(content: ScrapedData, seek_pos: usize, len: usize) -> String {
         let mut combined_text = String::new();
-    
+
         // すべてのテキストとリンクをまとめる
         for item in content.items {
             combined_text.push_str(&item.text);
             combined_text.push_str(" ");
-    
+
             if let Some(link) = item.link {
                 combined_text.push_str(&format!("({})", link));
             }
         }
-    
+
         let total_chars = combined_text.chars().count(); // 全体の文字数
-    
+
         // seek_posが文字数を超えていたら空文字を返す
         if seek_pos >= total_chars {
             return format!("...<0 characters remaining>");
         }
-    
+
         // seek_posから取得可能な文字数
         let available_chars = total_chars - seek_pos;
-        
+
         // 切り出す範囲を計算
-        let sliced_text: String = combined_text
-            .chars()
-            .skip(seek_pos)
-            .take(len)
-            .collect();
-    
+        let sliced_text: String = combined_text.chars().skip(seek_pos).take(len).collect();
+
         // 残り文字数を正しく計算
         let remaining_chars = available_chars.saturating_sub(sliced_text.chars().count());
-    
-        format!("{}...<{} characters remaining>", sliced_text, remaining_chars)
+
+        format!(
+            "{}...<{} characters remaining>",
+            sliced_text, remaining_chars
+        )
     }
 
     pub fn is_safe_url(url: &str) -> bool {
         // ローカルホスト・プライベートIP・ファイルスキームをブロック
         let dangerous_patterns = vec![
-            r"^http://localhost(:\d+)?", // localhost
-            r"^http://127\.\d+\.\d+\.\d+(:\d+)?", // 127.x.x.x
-            r"^http://192\.168\.\d+\.\d+(:\d+)?", // 192.168.x.x
-            r"^http://10\.\d+\.\d+\.\d+(:\d+)?", // 10.x.x.x
+            r"^http://localhost(:\d+)?",                             // localhost
+            r"^http://127\.\d+\.\d+\.\d+(:\d+)?",                    // 127.x.x.x
+            r"^http://192\.168\.\d+\.\d+(:\d+)?",                    // 192.168.x.x
+            r"^http://10\.\d+\.\d+\.\d+(:\d+)?",                     // 10.x.x.x
             r"^http://172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+(:\d+)?", // 172.16.x.x - 172.31.x.x
-            r"^file://", // file:// スキーム
+            r"^file://",                                             // file:// スキーム
         ];
-    
+
         // 正規表現でURLをチェック
         for pattern in &dangerous_patterns {
             let re = Regex::new(pattern).unwrap();
@@ -349,7 +362,6 @@ impl Browser {
         }
         true // 安全なURL
     }
-    
 }
 
 /// AI Functionとして利用するための `Tool` トレイト実装
@@ -359,7 +371,7 @@ impl Tool for Browser {
     }
 
     fn def_description(&self) -> &str {
-"Extracts webpage content using a CSS selector (avoid '*', use specific tags like 'p, h1, h2, h3, a').  
+        "Extracts webpage content using a CSS selector (avoid '*', use specific tags like 'p, h1, h2, h3, a').  
 Supports 'reqwest' (fast) and 'playwright' (for JavaScript-heavy pages).  
 Use 'seek_pos' and 'max_length' to paginate (e.g., 0-3999, 4000-3999) for full extraction.
 If the content is too long, use 'seek_pos' and 'max_length' to paginate the results.
@@ -405,40 +417,47 @@ For searching, use Bing."
             "required": ["url", "selector", "seek_pos", "max_length"]
         })
     }
-    
 
     fn run(&self, args: serde_json::Value) -> Result<String, String> {
-        let url = args.get("url")
+        let url = args
+            .get("url")
             .and_then(|v| v.as_str())
             .ok_or_else(|| "Missing 'url' parameter".to_string())?
             .to_string();
 
-        let selector = args.get("selector")
+        let selector = args
+            .get("selector")
             .and_then(|v| v.as_str())
             .ok_or_else(|| "Missing 'selector' parameter".to_string())?
             .to_string();
 
-        let mode = args.get("mode")
+        let mode = args
+            .get("mode")
             .and_then(|v| v.as_str())
             .unwrap_or("reqwest")
             .to_string();
 
-        let seek_pos = args.get("seek_pos")
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| "Missing 'seek_pos' parameter".to_string())? as usize;
+        let seek_pos =
+            args.get("seek_pos")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| "Missing 'seek_pos' parameter".to_string())? as usize;
 
-        let max_length = args.get("max_length")
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| "Missing 'max_length' parameter".to_string())? as usize;
+        let max_length =
+            args.get("max_length")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| "Missing 'max_length' parameter".to_string())? as usize;
 
         let scraper = self.clone();
 
-        Browser::is_safe_url(&url).then(|| ()).ok_or_else(|| "Are you try hacking me?".to_string())?;
+        Browser::is_safe_url(&url)
+            .then(|| ())
+            .ok_or_else(|| "Are you try hacking me?".to_string())?;
 
         let result = std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             match mode.as_str() {
-                "reqwest" => rt.block_on(scraper.scrape_reqwest(&url, &selector))
+                "reqwest" => rt
+                    .block_on(scraper.scrape_reqwest(&url, &selector))
                     .or_else(|_| Err(ScraperError::Other("Playwright not available".to_string()))),
                 "playwright" => Err(ScraperError::Other("Playwright not available".to_string())),
                 _ => Err(ScraperError::UnknownError),
