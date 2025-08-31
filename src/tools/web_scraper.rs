@@ -306,7 +306,6 @@ impl Browser {
     //     let content = page.content().await.map_err(|_| ScraperError::ContentError)?;
     //     Ok(content)
     // }
-
     pub fn compress_content(content: ScrapedData, seek_pos: usize, len: usize) -> String {
         let mut combined_text = String::new();
 

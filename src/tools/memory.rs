@@ -37,26 +37,25 @@ impl MemoryTool {
             if let Ok(entries) = fs::read_dir(MEMORY_DIR) {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let path = entry.path();
-                    if path.is_file() {
-                        if let Some(ext) = path.extension() {
-                            if ext == "md" {
-                                // ファイル名（拡張子除く）を key とする
-                                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                                    let mut file = match fs::File::open(&path) {
-                                        Ok(f) => f,
-                                        Err(e) => {
-                                            error!("Failed to open file {:?}: {}", path, e);
-                                            continue;
-                                        }
-                                    };
-                                    let mut contents = String::new();
-                                    if let Err(e) = file.read_to_string(&mut contents) {
-                                        error!("Failed to read file {:?}: {}", path, e);
-                                        continue;
-                                    }
-                                    mem_map.insert(stem.to_string(), contents);
+                    if path.is_file()
+                        && let Some(ext) = path.extension()
+                        && ext == "md"
+                    {
+                        // ファイル名（拡張子除く）を key とする
+                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                            let mut file = match fs::File::open(&path) {
+                                Ok(f) => f,
+                                Err(e) => {
+                                    error!("Failed to open file {:?}: {}", path, e);
+                                    continue;
                                 }
+                            };
+                            let mut contents = String::new();
+                            if let Err(e) = file.read_to_string(&mut contents) {
+                                error!("Failed to read file {:?}: {}", path, e);
+                                continue;
                             }
+                            mem_map.insert(stem.to_string(), contents);
                         }
                     }
                 }
@@ -128,10 +127,10 @@ impl MemoryTool {
                 let mut mem = self.memory.lock().unwrap();
                 mem.remove(k);
                 let file_path = Self::get_file_path(k);
-                if file_path.exists() {
-                    if let Err(e) = fs::remove_file(&file_path) {
-                        error!("Failed to remove file {:?}: {}", file_path, e);
-                    }
+                if file_path.exists()
+                    && let Err(e) = fs::remove_file(&file_path)
+                {
+                    error!("Failed to remove file {:?}: {}", file_path, e);
                 }
             }
             None => {
@@ -142,10 +141,9 @@ impl MemoryTool {
                         let path = entry.path();
                         if path.is_file()
                             && path.extension().map(|ext| ext == "md").unwrap_or(false)
+                            && let Err(e) = fs::remove_file(&path)
                         {
-                            if let Err(e) = fs::remove_file(&path) {
-                                error!("Failed to remove file {:?}: {}", path, e);
-                            }
+                            error!("Failed to remove file {:?}: {}", path, e);
                         }
                     }
                 }
@@ -174,14 +172,20 @@ impl MemoryTool {
     /// (人間に読みやすい形式: "YYYY-MM-DD HH:MM:SS")
     fn get_last_modified(key: &str) -> Option<String> {
         let file_path = Self::get_file_path(key);
-        if let Ok(metadata) = fs::metadata(&file_path) {
-            if let Ok(modified) = metadata.modified() {
-                // SystemTime をローカル日時に変換
-                let datetime: DateTime<Local> = modified.into();
-                return Some(datetime.format("%Y-%m-%d %H:%M:%S").to_string());
-            }
+        if let Ok(metadata) = fs::metadata(&file_path)
+            && let Ok(modified) = metadata.modified()
+        {
+            // SystemTime をローカル日時に変換
+            let datetime: DateTime<Local> = modified.into();
+            return Some(datetime.format("%Y-%m-%d %H:%M:%S").to_string());
         }
         None
+    }
+}
+
+impl Default for MemoryTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -12,6 +12,12 @@ impl GetTime {
     }
 }
 
+impl Default for GetTime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GetTime {
     /// 国コードを元に現在の時刻を取得する
     pub fn get_time_by_country(&self, country_code: &str) -> Result<String, String> {
