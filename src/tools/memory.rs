@@ -139,7 +139,9 @@ impl MemoryTool {
                 if let Ok(entries) = fs::read_dir(MEMORY_DIR) {
                     for entry in entries.filter_map(|e| e.ok()) {
                         let path = entry.path();
-                        if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
+                        if path.is_file()
+                            && path.extension().map(|ext| ext == "md").unwrap_or(false)
+                        {
                             if let Err(e) = fs::remove_file(&path) {
                                 error!("Failed to remove file {:?}: {}", path, e);
                             }
