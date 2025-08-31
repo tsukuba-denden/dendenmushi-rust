@@ -127,10 +127,10 @@ impl MemoryTool {
                 let mut mem = self.memory.lock().unwrap();
                 mem.remove(k);
                 let file_path = Self::get_file_path(k);
-                if file_path.exists()
-                    && let Err(e) = fs::remove_file(&file_path)
-                {
-                    error!("Failed to remove file {:?}: {}", file_path, e);
+                if file_path.exists() {
+                    if let Err(e) = fs::remove_file(&file_path) {
+                        error!("Failed to remove file {:?}: {}", file_path, e);
+                    }
                 }
             }
             None => {
@@ -139,11 +139,10 @@ impl MemoryTool {
                 if let Ok(entries) = fs::read_dir(MEMORY_DIR) {
                     for entry in entries.filter_map(|e| e.ok()) {
                         let path = entry.path();
-                        if path.is_file()
-                            && path.extension().map(|ext| ext == "md").unwrap_or(false)
-                            && let Err(e) = fs::remove_file(&path)
-                        {
-                            error!("Failed to remove file {:?}: {}", path, e);
+                        if path.is_file() && path.extension().map(|ext| ext == "md").unwrap_or(false) {
+                            if let Err(e) = fs::remove_file(&path) {
+                                error!("Failed to remove file {:?}: {}", path, e);
+                            }
                         }
                     }
                 }
