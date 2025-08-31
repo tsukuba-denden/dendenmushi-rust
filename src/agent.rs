@@ -293,10 +293,8 @@ impl ChannelState {
         mut message: InputMessage,
         model: AIModel,
     ) -> String {
-        // プロンプトストリームの取得
-        let user_prompt = ChannelState::prepare_user_prompt(&mut message, 1).await;
-        let mut r_prompt_stream = self.prompt_stream.lock().await;
-        r_prompt_stream.add(user_prompt).await;
+        // プロンプトストリームの取得（メッセージは add_message ですでに追加されているため、ここでは追加しない）
+        let r_prompt_stream = self.prompt_stream.lock().await;
         let mut prompt_stream = r_prompt_stream.clone();
         drop(r_prompt_stream); // 先にロックを解除
 

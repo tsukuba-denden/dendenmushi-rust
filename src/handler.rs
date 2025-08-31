@@ -273,6 +273,8 @@ impl EventHandler for Handler {
         let is_mentioned = msg.mentions.iter().any(|user| user.id == bot_id);
 
         if is_mentioned {
+            // Add the message to state before reasoning
+            state.add_message(message.clone()).await;
             let answer_text = self.handle_mentioned_message(&ctx, &msg, state, message).await;
             self.send_split_message(&ctx, msg.channel_id, answer_text).await;
         } else {
