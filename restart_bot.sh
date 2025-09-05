@@ -21,9 +21,9 @@ for arg in "$@"; do
 done
 
 # スクリプトの場所を基準にプロジェクトディレクトリを設定
-PROJECT_DIR="/home/yuubinnkyoku/dendenmushi"
-LOG_FILE="/home/yuubinnkyoku/dendenmushi/logs/restart.log"
-BOT_LOG_FILE="/home/yuubinnkyoku/dendenmushi/logs/bot.log"
+PROJECT_DIR="/home/yuubinn/dendenmushi-rust"
+LOG_FILE="/home/yuubinn/dendenmushi-rust/logs/restart.log"
+BOT_LOG_FILE="/home/yuubinn/dendenmushi-rust/logs/bot.log"
 
 # ログディレクトリを作成
 mkdir -p "$(dirname "$LOG_FILE")"

@@ -36,10 +36,10 @@ echo ""
 echo "再起動を開始します..."
 
 # 自動再起動スクリプトを実行（オプション付き）
-/home/yuubinnkyoku/dendenmushi/restart_bot.sh $RESTART_OPTIONS
+/home/yuubinn/dendenmushi-rust/restart_bot.sh $RESTART_OPTIONS
 
 echo ""
 echo "再起動処理が完了しました。"
 echo "ログを確認するには以下のコマンドを使用してください："
-echo "  tail -f /home/yuubinnkyoku/dendenmushi/logs/restart.log"
-echo "  tail -f /home/yuubinnkyoku/dendenmushi/logs/bot.log"
+echo "  tail -f /home/yuubinn/dendenmushi-rust/logs/restart.log"
+echo "  tail -f /home/yuubinn/dendenmushi-rust/logs/bot.log"
