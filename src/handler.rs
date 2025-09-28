@@ -696,6 +696,22 @@ impl EventHandler for Handler {
                         .add_string_choice(
                             AIModel::M5.to_model_discription(),
                             AIModel::M5.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemini25Flash.to_model_discription(),
+                            AIModel::Gemini25Flash.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::GeminiFlashLatest.to_model_discription(),
+                            AIModel::GeminiFlashLatest.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemini15Flash.to_model_discription(),
+                            AIModel::Gemini15Flash.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemini15Pro.to_model_discription(),
+                            AIModel::Gemini15Pro.to_model_name(),
                         ),
                     ),
             ],

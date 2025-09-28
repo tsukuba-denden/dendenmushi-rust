@@ -43,6 +43,7 @@ pub enum AIModel {
     Gemini25Flash,
     Gemini15Flash,
     Gemini15Pro,
+    GeminiFlashLatest,
 }
 
 impl AIModel {
@@ -56,6 +57,7 @@ impl AIModel {
             AIModel::Gemini25Flash => "gemini-2.5-flash".to_string(),
             AIModel::Gemini15Flash => "gemini-1.5-flash".to_string(),
             AIModel::Gemini15Pro => "gemini-1.5-pro".to_string(),
+            AIModel::GeminiFlashLatest => "gemini-flash-latest".to_string(),
         }
     }
 
@@ -73,6 +75,7 @@ impl AIModel {
                 "gemini-1.5-flash: 高速マルチモーダル (Vision向け)".to_string()
             }
             AIModel::Gemini15Pro => "gemini-1.5-pro: 高性能推論".to_string(),
+            AIModel::GeminiFlashLatest => "gemini-flash-latest: 常に最新のFlash系 (将来の2.x/3.x系を自動追随)".to_string(),
         }
     }
 
@@ -86,6 +89,7 @@ impl AIModel {
             AIModel::Gemini25Flash => 5,
             AIModel::Gemini15Flash => 5,
             AIModel::Gemini15Pro => 20,
+            AIModel::GeminiFlashLatest => 5,
         }
     }
 
@@ -100,6 +104,7 @@ impl AIModel {
             "gemini-2.5-flash" => Ok(AIModel::Gemini25Flash),
             "gemini-1.5-flash" => Ok(AIModel::Gemini15Flash),
             "gemini-1.5-pro" => Ok(AIModel::Gemini15Pro),
+            "gemini-flash-latest" => Ok(AIModel::GeminiFlashLatest),
             _ => Err(format!("Unknown model name: {}", model_name)),
         }
     }
@@ -213,13 +218,25 @@ impl AIModel {
                 top_p: Some(1.0),
                 web_search_options: None,
             },
+            AIModel::GeminiFlashLatest => ModelConfig {
+                model: "gemini-flash-latest".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: None,
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
         }
     }
 }
 
 impl Default for AIModel {
     fn default() -> Self {
-        AIModel::from_model_name(*MODEL_NAME).unwrap_or_else(|_| AIModel::Gemini25Flash) // デフォルトは Gemini
+        AIModel::from_model_name(*MODEL_NAME).unwrap_or_else(|_| AIModel::GeminiFlashLatest) // デフォルトは 最新Gemini Flash
     }
 }
 
