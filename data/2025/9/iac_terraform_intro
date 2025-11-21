@@ -1,0 +1,69 @@
+# IaC と Terraform 超入門
+
+> ざっくり 5 分で読む、クラウド時代のインフラ自動化ガイド
+
+## IaC ってなに?
+
+Infrastructure as Code (IaC) は、サーバ・ネットワーク・権限など **インフラ構成をコード(宣言的ファイル)として管理** するプラクティス。Git でバージョン管理し、CI/CD で自動適用できるため:
+
+- 手作業ポチポチによる "設定ずれ" を撲滅
+- レビュー/テスト可能 → 品質向上
+- 再現性・スケーラビリティが高い
+
+代表ツールは **Terraform**, AWS CloudFormation, Pulumi など。
+
+## Terraform の特徴
+
+|               | Terraform |
+|---------------|-----------|
+| 言語          | HCL(HashiCorp Configuration Language) – JSON ライクで読みやすい |
+| マルチクラウド| AWS/GCP/Azure/Cloudflare… プロバイダを切替えるだけで統一操作 |
+| 宣言的        | `resource "aws_s3_bucket" "log" { … }` のように “ほしい姿” を宣言 |
+| 状態管理      | **state** ファイルで現実世界のリソースを追跡 (S3 + DynamoDB でロックが定番) |
+| Plan & Apply  | 変更差分を `terraform plan` で確認→ `terraform apply` で実行 |
+
+## 3 ステップで触ってみる
+
+```bash
+brew install terraform           # macOS (他 OS は公式手順)
+terraform -install-autocomplete   # 補完設定
+
+mkdir tf-demo && cd $_
+cat > main.tf <<'EOF'
+terraform {
+  required_providers { random = { source = "hashicorp/random" } }
+  required_version = ">= 1.8"
+}
+
+resource "random_pet" "demo" {
+  length    = 2
+  separator = "-"
+}
+
+output "name" { value = random_pet.demo.id }
+EOF
+
+terraform init   # provider を取得
+terraform plan   # 何が作られるか確認
+terraform apply  # 実行 (ローカルにランダム名生成)
+```
+
+Cloud リソース (例: AWS S3) を作るときは認証情報を環境変数/プロファイルに入れて `resource "aws_s3_bucket" "log" { bucket = "my-log-bkt" }` と書くだけ。
+
+## ベストプラクティスかんたんチェックリスト
+
+- Remote State で **S3(+DynamoDB Lock)** または Terraform Cloud を使う
+- `terraform fmt` & `terraform validate` を CI に組み込む
+- **モジュール化**: `/modules/vpc`, `/modules/ecs` などに共通コードを切り出し
+- `workspace` で dev/stg/prod を分離 or ブランチ毎に State 分割
+- `tfsec`, `checkov` でセキュリティ静的解析
+
+## 学習リソース
+
+- Terraform Official Docs: https://developer.hashicorp.com/terraform
+- Learn Guides (無料ハンズオン): https://developer.hashicorp.com/terraform/tutorials
+- Cloudflare Terraform Examples: https://github.com/cloudflare/terraform-cloudflare-examples
+- 公式日本語本『Terraform実践ガイド 第2版』オライリー (2024)
+
+---
+この記事は ChatGPT が生成し、自動デプロイされました ✨

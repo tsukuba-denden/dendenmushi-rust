@@ -1,0 +1,58 @@
+# HoTT (Homotopy Type Theory) 超入門 ─ 5 分で雰囲気をつかむ
+
+## 1. HoTT とは？
+Homotopy Type Theory＝「位相幾何学のホモトピー理論」＋「型理論」を融合した新しい基礎数学フレームワーク。
+- 2010 年頃から Voevodsky らによって提唱。
+- 言語：Coq / Agda / Lean などの証明アシスタント上で扱える。
+- 目的：集合論 (ZFC) に代わる "計算フレンドリー" な基礎を提供。
+
+## 2. キーワード早見表
+| 用語 | ざっくり意味 | 直感的イメージ |
+|------|--------------|----------------|
+| 型 (Type) | "対象の集合" の代わり | 点が集まった空間 |
+| 項 (Term) | 型の要素 | 空間内の点 |
+| 同値 (Path) | 2 つの項が同じである証拠 | 点と点を結ぶ連続な道 |
+| `Id_A(a,b)` | a と b が同値である型 | 道の集合 |
+| 高次同値 (Higher path) | パスとパスが同値…を無限に | 道で囲まれた面、立体… |
+| Univalence 公理 | “同型 ≒ 等しい” を型レベルで公理化 | 空間が変形できれば同じ |
+
+## 3. なぜ嬉しい？
+1. **計算と証明の距離が近い**
+   - 証明＝プログラム、命題＝型 (Curry–Howard) を高次まで拡張。
+2. **同型を直接扱える**
+   - 従来の集合論では "同型 ≠ 等号" で煩雑だった構造がスッキリ。
+3. **幾何学的直感**
+   - パス・面という図形的概念で型を考えやすい。
+
+## 4. コードで見る HoTT の顔
+(Lean4 + mathlib4/hott)
+```lean
+universe u
+-- 型 A 上の自己同値 (equivalence)
+structure Equiv (A : Type u) :=
+  (to_fun   : A → A)
+  (inv_fun  : A → A)
+  (left_id  : ∀ x, inv_fun (to_fun x) = x)
+  (right_id : ∀ x, to_fun (inv_fun x) = x)
+
+-- Univalence: Equiv A B ≃ A = B を仮定
+axiom univalence {A B : Type u} : Equiv A B → (A = B)
+```
+ポイント：`Equiv` で示された "構造として同じ" が `=` に持ち上がる。
+
+## 5. どんな成果がある？
+- **π₁(S¹)=ℤ** を HoTT 内で機械証明。  
+- **定理の搬送 (transport)** によりデータ型を“パス渡し”で変換。
+- **cubical type theory**: 計算可能な univalence を実装 (Agda, CubicalTT)。
+
+## 6. 使いはじめるには
+1. Agda `--cubical` オプション
+2. Lean4 + `hott3` ライブラリ
+3. HoTT Book (無料 PDF)
+
+## 7. 参考文献・リンク
+1. The Univalent Foundations Program (2013). *Homotopy Type Theory: Univalent Foundations of Mathematics* (通称 HoTT Book).
+2. Voevodsky, V. (2013). *Univalent Foundations Project* slides.
+3. Coquand, T. et al. (2018). *Cubical Type Theory*.
+
+*記事更新: 2025-09*

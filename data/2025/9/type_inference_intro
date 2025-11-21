@@ -1,0 +1,59 @@
+# 型推論ざっくり入門  ─ 5 分で読む基礎と現在地
+
+## 1. 型推論とは
+プログラミング言語が **“型を明示しなくても自動で決定する”** 仕組み。  
+例:
+```ocaml
+let id x = x        (* x : 'a, id : 'a -> 'a と推論 *)
+```
+人が型を書かなくてもコンパイラが “`id` はどんな型にも使える” と分かる。
+
+## 2. 代表的アルゴリズム
+
+| 名前 | コアとなるアイデア | 主な採用言語 |
+|------|-------------------|--------------|
+| Hindley–Milner (HM) | “最も一般的型” を求める単一化 (unification) | ML, Haskell(一部), OCaml, Rust(部分) |
+| Algorithm W | HM を実行手順に落とした古典実装 | ― |
+| Local Type Inference | 一部の型だけ補完する。全体の汎化は行わない | Scala, Swift |
+| Bidirectional Typing | «式を合成するときのみ推論» と «型をチェック» を矢印２方向で分離 | Idris, Elm, F# |
+| Constraint-Based | "式→制約集" を作り SAT/SMT で解く | Rust (borrow/region), TypeScript |
+
+### HM (Algorithm W) の 3 ステップ
+1. **式をなぞって型変数を振る**  
+2. **制約 (型方程式) を集める**  
+3. **単一化 (unification)** で全型変数を解き「最も一般的型」を得る
+
+> 単一化は「２つの木構造が同一になるよう変数に具体型を代入」する手続き。  
+> Robinson のアルゴリズム O(nα(n)) で動く。
+
+## 3. よく出る単語
+- **汎化 (generalization)** : `let` でスコープを閉じるとき、余った型変数を∀で包む。
+- **多相 (polymorphism)** : １つの式が複数型で使える性質 (`'a list → int` など)。
+- **制約 (constraint)** : 例 `a ~ Int`, `a ~ b list` のような等式、あるいは `Sized<T>` などクラス/トレイト境界。
+
+## 4. 限界と拡張
+| 課題 | 典型的拡張 | 採用例 |
+|------|-----------|-------|
+| GADTs / dependent 型は HM だけでは扱えない | **局所型注釈(∴利用者が一部型を書く)** | OCaml, Haskell |
+| サブタイプ (継承) | **制約付き単一化** / **交差型, 和型** | TypeScript, Flow |
+| 借用, ライフタイム | **リージョン推論 (constraint-based)** | Rust |
+
+## 5. 型推論を遊んで理解するツール
+- [Hindley–Milner Playground](https://github.com/monoid/HM-playground) – JS で動く可視化
+- [Rust Playground](https://play.rust-lang.org/) – "Run" すると borrow checker のエラーが見える
+- [TypeScript AST explorer](https://ts-ast-viewer.com/) – 推論後の具体型を確認可能
+
+## 6. もっと踏み込むなら
+- Benjamin C. Pierce *Types and Programming Languages* (通称 TAPL)
+- Simon Peyton Jones *The Implementation of Functional Programming Languages* ch.7
+- *Programming Languages: Application and Interpretation* (PLAI) ch.11
+- HoTT／依存型を見据えるなら *The HoTT Book* §1–2
+
+---
+### 参考ソース
+1. Hindley, R. (1969). The Principal Type-Scheme of an Object in Combinatory Logic.
+2. Milner, R. (1978). A theory of type polymorphism in programming.
+3. Pierce, B. C. (2002). *Types and Programming Languages*.
+4. Norell, U. (2007). *Towards a Practical Programming Language Based on Dependent Type Theory* (Agda).
+
+この記事は 2025-01 現在の一般的実装を整理したものです。
