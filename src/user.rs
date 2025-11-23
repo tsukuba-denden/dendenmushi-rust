@@ -18,7 +18,7 @@ impl UserContext {
     pub fn new(user_id: UserId) -> UserContext {
         UserContext {
             user_id,
-            main_model: Models::Gpt5Mini,
+            main_model: Models::O4Mini,
             rate_line: 0,
         }
     }

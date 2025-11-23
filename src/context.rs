@@ -65,7 +65,7 @@ impl ObserverContext {
 
         ObserverContext {
             lm_client: Arc::new(lm_client),
-            scraper: Arc::new(ScraperClient::new().await.unwrap()),
+            scraper: Arc::new(ScraperClient::new("http://192.168.0.81")),
             config: Arc::new(config),
             chat_contexts: Arc::new(ChatContexts::new()),
             user_contexts: Arc::new(UserContexts::new()),
@@ -75,7 +75,7 @@ impl ObserverContext {
     }
 
     pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _ = self.scraper.engine.shutdown().await;
+        info!("Shutting down ObserverContext...");
         Ok(())
     }
 }

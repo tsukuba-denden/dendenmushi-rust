@@ -257,12 +257,11 @@ async fn handle_message(
 
         let model = ob_context.user_contexts.get_or_create(user_id).main_model;
 
-        // 「Thinking...」を書き換えて最終回答を表示
-        thinking_msg
-            .edit(&ctx.http, EditMessage::new().content(format!("-# Reasoning done in {}ms, model: {}", elapsed, model)))
-            .await?;
+        // 「Thinking...」を削除して最終回答を表示
+        thinking_msg.delete(&ctx.http).await.ok();
+
         msg.channel_id
-            .send_message(&ctx.http, CreateMessage::new().content(text.clone()))
+            .send_message(&ctx.http, CreateMessage::new().content(format!("{}\n-# Reasoning done in {}ms, model: {}", text, elapsed, model)))
             .await?;
     }
 
