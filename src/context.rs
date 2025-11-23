@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use kurosabi::context::ContextMiddleware;
 use log::info;
@@ -6,26 +6,37 @@ use openai_dive::v1::api::Client as OpenAIClient;
 use wk_371tti_net_crawler::Client as ScraperClient;
 use serenity::{Client as DiscordClient, all::GatewayIntents};
 
-use crate::{commands::ping, config::Config};
+use crate::{channel::ChatContexts, commands::{ask, clear, disable, enable, model, ping}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
 
 #[derive(Clone)]
 pub struct ObserverContext {
-    pub open_ai_client: Arc<OpenAIClient>,
+    pub lm_client: Arc<LMClient>,
     pub scraper: Arc<ScraperClient>,
     pub config: Arc<Config>,
+    pub chat_contexts: Arc<ChatContexts>,
+    pub user_contexts: Arc<UserContexts>,
+    pub tools: Arc<HashMap<String, Box<dyn LMTool>>>,
 }
 
 impl ObserverContext {
     pub async fn new() -> ObserverContext {
-        let config = Config {
-            discord_token: std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set"),
-            openai_api_key: std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set"),
-        };
+        let config = Config::new();
+
+        let lm_client = LMClient::new(OpenAIClient::new(config.openai_api_key.clone()));
+        let tools: HashMap<String, Box<dyn LMTool>> = vec![
+            Box::new(tools::get_time::GetTime::new()) as Box<dyn LMTool>,
+        ]
+        .into_iter()
+        .map(|tool| (tool.name(), tool))
+        .collect();
 
         ObserverContext {
-            open_ai_client: Arc::new(OpenAIClient::new(config.openai_api_key.clone())),
+            lm_client: Arc::new(lm_client),
             scraper: Arc::new(ScraperClient::new().await.unwrap()),
             config: Arc::new(config),
+            chat_contexts: Arc::new(ChatContexts::new()),
+            user_contexts: Arc::new(UserContexts::new()),
+            tools: Arc::new(tools),
         }
     }
 
@@ -43,11 +54,19 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
             .options(poise::FrameworkOptions {
                 commands: vec![
                     ping(),  // ここにコマンドを追加
+                    ask(),
+                    enable(),
+                    clear(),
+                    disable(),
+                    model()
                 ],
                 // prefix の設定（!ping とか）
                 prefix_options: poise::PrefixFrameworkOptions {
                     prefix: Some("!".into()),
                     ..Default::default()
+                },
+                event_handler: |ctx, event, framework, data| {
+                    Box::pin(event_handler(ctx, event, framework, data))
                 },
                 ..Default::default()
             })
@@ -63,10 +82,12 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
             .build();
 
             
-        let intents = GatewayIntents::GUILD_MESSAGES
+        let intents =
+            GatewayIntents::GUILD_MESSAGES
             | GatewayIntents::DIRECT_MESSAGES
-            | GatewayIntents::GUILDS
-            | GatewayIntents::DIRECT_MESSAGES;
+            | GatewayIntents::GUILD_MESSAGE_REACTIONS // (必要なら)
+            | GatewayIntents::MESSAGE_CONTENT;
+
 
         let discord_client = DiscordClient::builder(c.config.discord_token.clone(), intents)
             .framework(framework);
@@ -77,3 +98,4 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
 
     }
 }
+
