@@ -1,29 +1,53 @@
-use std::{error::Error, sync::atomic::AtomicU64, time::{Duration, Instant}};
+use std::{error::Error, time::{Duration, Instant}};
 
+use chrono::format;
 use log::{debug, info};
 use openai_dive::v1::resources::response::{request::{ContentInput, ContentItem, ImageDetailLevel, InputMessage}, response::Role};
-use serenity::all::{CreateMessage, EditMessage, FullEvent, Message};
+use serenity::all::{ActivityData, CreateMessage, EditMessage, FullEvent, Message};
 use tokio::{sync::mpsc, time::sleep};
 
 
 use crate::{commands::log_err, context::ObserverContext, lmclient::LMContext};
 
 
-
+/// イベントハンドラ
+/// serenity poise へ渡すもの
 pub async fn event_handler(
     ctx: &serenity::client::Context,
     event: &FullEvent,
     framework: poise::FrameworkContext<'_, ObserverContext, Box<dyn Error + Send + Sync>>,
     data: &ObserverContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    if let FullEvent::Message { new_message } = event {
-        handle_message(ctx, new_message, framework, data).await?;
+    match event {
+        FullEvent::Message { new_message } => {
+            handle_message(ctx, new_message, framework, data).await?;
+        }
+        FullEvent::Ready { data_about_bot } => {
+            info!("Bot is connected as {}", data_about_bot.user.name);
+            update_presence(ctx).await;
+        }
+        FullEvent::GuildCreate { guild, is_new: _ } => {
+            info!("Joined new guild: {} (id: {})", guild.name, guild.id);
+            update_presence(ctx).await;
+        }
+
+        _ => { /* 他のイベントは無視 */ }
     }
 
     Ok(())
 }
 
+/// ステータスメッセージの更新
+async fn update_presence(ctx: &serenity::client::Context) {
+    let guild_count = ctx.cache.guilds().len();
 
+    ctx.set_activity(Some(ActivityData::playing(
+        format!("in {} servers", guild_count)
+    )));
+}
+
+
+/// メッセージを受け取ったときの処理
 async fn handle_message(
     ctx: &serenity::client::Context,
     msg: &Message,
@@ -31,19 +55,24 @@ async fn handle_message(
     ob_context: &ObserverContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let start = Instant::now();
-    // 自分やBOTのメッセージは無視
-    if msg.author.bot {
+    let channel_id = msg.channel_id;
+
+    let bot_id = ctx.cache.current_user().id;
+    // 自分のメッセージは無視
+    if msg.author.id == bot_id {
         return Ok(());
     }
-    let bot_id = ctx.cache.current_user().id;
 
     let is_mentioned = msg.mentions_user_id(bot_id);
 
-    let channel_id = msg.channel_id;
-    if !ob_context.chat_contexts.is_enabled(channel_id) {
-        return Ok(());
-    }
-    let content = msg.content.clone();
+    let content = format!(
+        "user: {}, display_name: {}, msg_id: {}, replay_to: {}\n{}", 
+        msg.author.name, 
+        msg.author.display_name(),
+        msg.id,
+        msg.referenced_message.as_ref().map_or("None".to_string(), |m| m.id.to_string()),
+        msg.content
+    );
 
     // 添付画像のURLを取る
     let image_urls: Vec<String> = msg
@@ -74,7 +103,6 @@ async fn handle_message(
         lm_context.add_text(content.clone(), Role::User);
     } else {
         debug!("Adding image message to context in channel {}, content: {}", channel_id, content);
-        // とりあえず1枚目だけ渡す例。複数渡したければ List に追加
         lm_context.add_message(InputMessage {
             role: Role::User,
             content: ContentInput::List(
@@ -83,11 +111,13 @@ async fn handle_message(
                     items.push(ContentItem::Text {
                         text: content.clone(),
                     });
-                    items.push(ContentItem::Image {
-                        detail: ImageDetailLevel::Low,
-                        file_id: None,
-                        image_url: Some(image_urls[0].clone()),
-                    });
+                    for url in image_urls.iter() {
+                        items.push(ContentItem::Image {
+                            detail: ImageDetailLevel::Low,
+                            file_id: None,
+                            image_url: Some(url.clone()),
+                        });
+                    }
                     items
                 }
             )
@@ -97,6 +127,40 @@ async fn handle_message(
     ob_context.chat_contexts.marge(channel_id, &lm_context);
 
     if is_mentioned {
+        if !ob_context.chat_contexts.is_enabled(channel_id) {
+            msg.channel_id
+                .send_message(&ctx.http, CreateMessage::new().content("info: Chat context is disabled in this channel."))
+                .await?;
+            return Ok(());
+        }
+        let user_id = msg.author.id;
+        let user_ctx = ob_context.user_contexts.get_or_create(user_id);
+        let model = user_ctx.main_model.clone();
+
+        let model_cost = model.rate_cost();
+        let sec_per_cost = ob_context.config.rate_limit_sec_per_cost; // コストあたりの秒数
+        let window_size = ob_context.config.rale_limit_window_size; // バースト許容量
+        let user_line = user_ctx.rate_line;
+        
+        // レートリミットの計算
+        let time_stamp = chrono::Utc::now().timestamp() as u64;
+        let limit_line = window_size + time_stamp;
+        let add_line = model_cost * sec_per_cost;
+        let added_user_line = if user_line == 0 {
+            0 // リミットレスアカウント
+        } else if user_line < time_stamp {
+            time_stamp + add_line
+        } else {
+            user_line + add_line
+        };
+
+        if added_user_line > limit_line {
+            msg.channel_id
+                .send_message(&ctx.http, CreateMessage::new().content(format!("Err: rate limit - try again after <t:{}:R>", (added_user_line - limit_line))))
+                .await?;
+        }
+        ob_context.user_contexts.set_rate_line(user_id, added_user_line);
+
         let typing_ctx = ctx.clone();
 
         let typing_handle = tokio::spawn(async move {
@@ -105,9 +169,20 @@ async fn handle_message(
                 sleep(Duration::from_secs(5)).await; // だいたい5秒おきでOK
             }
         });
-        let context = ob_context.chat_contexts.get_or_create(channel_id);
-        let model = ob_context.user_contexts.get_or_create(msg.author.id).main_model.clone();
+        let mut context = ob_context.chat_contexts.get_or_create(channel_id);
         let tools = ob_context.tools.clone();
+
+        let system_prompt = format!{
+            "{}\n current channel_id: {}, channel_name: {}",
+            ob_context.config.system_prompt,
+            msg.channel_id, 
+            msg.channel_id.name(&ctx.http).await.unwrap_or("None".to_string()),
+        };
+
+        context.add_message(InputMessage {
+            role: Role::System,
+            content: ContentInput::Text(system_prompt),
+        });
 
         let mut thinking_msg = msg
             .channel_id
@@ -127,7 +202,7 @@ async fn handle_message(
         tokio::select! {
             biased;
 
-            r = ob_context.lm_client.generate_response(&context, Some(2000), Some(tools), Some(state_tx), Some(delta_tx), Some(model.to_parameter())) => {
+            r = ob_context.lm_client.generate_response(ob_context.clone(), &context, Some(2000), Some(tools), Some(state_tx), Some(delta_tx), Some(model.to_parameter())) => {
                 if let Err(e) = &r {
                     log_err("Error generating response", e.as_ref());
                     thinking_msg
@@ -141,14 +216,14 @@ async fn handle_message(
                 
             }
             _ = async {
-                let mut last_edit = Instant::now() + Duration::from_secs(1);      // 前回 edit した時間
+                let mut last_edit = Instant::now() + Duration::from_millis(1000);      // 前回 edit した時間
                 let mut swap = String::new();          // 状態保存用バッファ
 
                 while let Some(state) = state_rx.recv().await {
                     swap = state;
 
                     // 1秒未満ならまだ edit しない
-                    if last_edit.elapsed() < Duration::from_secs(1) {
+                    if last_edit.elapsed() < Duration::from_millis(1000) {
                         continue;
                     }
 

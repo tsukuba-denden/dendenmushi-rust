@@ -1,13 +1,11 @@
-use core::error;
 use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
 use log::{debug, error, info, warn};
-use openai_dive::v1::{api::Client, resources::{response::{items::{FunctionToolCall, FunctionToolCallOutput, InputItemStatus, ReasoningSummaryPart}, request::{ContentInput, ContentItem, ImageDetailLevel, InputItem, InputMessage, ResponseInput, ResponseInputItem, ResponseParametersBuilder}, response::{OutputContent, ResponseOutput, ResponseStreamEvent, Role}, shared::{ResponseTool, ResponseToolChoice, UserLocationType, WebSearchUserLocation}}, shared::WebSearchContextSize}};
-use serde::de;
+use openai_dive::v1::{api::Client, resources::response::{items::{FunctionToolCall, FunctionToolCallOutput, ReasoningSummaryPart}, request::{ContentInput, ContentItem, ImageDetailLevel, InputItem, InputMessage, ResponseInput, ResponseInputItem, ResponseParametersBuilder}, response::{OutputContent, ResponseOutput, ResponseStreamEvent, Role}, shared::{ResponseTool, ResponseToolChoice}}};
 use serenity::futures::{StreamExt};
 use tokio::sync::mpsc;
 
-use crate::config::Models;
+use crate::{config::Models, context::ObserverContext};
 pub struct LMClient {
     pub client: Client,
 }
@@ -21,6 +19,7 @@ impl LMClient {
 
     pub async fn generate_response(
         &self,
+        ob_ctx: ObserverContext,
         lm_context: &LMContext,
         max_tokens: Option<u32>,
         tools: Option<Arc<HashMap<String, Box<dyn LMTool>>>>,
@@ -198,7 +197,7 @@ impl LMClient {
 
                 // ここでtoolを実行
                 if let Some(tool) = tools.get(&name) {
-                    let exec_result = tool.execute(v_args);
+                    let exec_result = tool.execute(v_args, ob_ctx.clone()).await;
                     debug!("Tool {} executed with result: {:?}", name, exec_result);
                     let output = match exec_result {
                         Ok(res) => FunctionToolCallOutput {
@@ -364,6 +363,7 @@ impl LMContext {
     }
 }
 
+#[async_trait::async_trait]
 pub trait LMTool: Send + Sync {
     fn define(&self) -> ResponseTool {
         ResponseTool::Function {
@@ -376,5 +376,5 @@ pub trait LMTool: Send + Sync {
     fn json_schema(&self) -> serde_json::Value;
     fn description(&self) -> String;
     fn name(&self) -> String;
-    fn execute(&self, args: serde_json::Value) -> Result<String, String>;
+    async fn execute(&self, args: serde_json::Value, ob_ctx: ObserverContext) -> Result<String, String>;
 } 

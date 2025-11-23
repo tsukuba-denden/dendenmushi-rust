@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::{Arc, RwLock}};
 
 use kurosabi::context::ContextMiddleware;
 use log::info;
@@ -6,7 +6,7 @@ use openai_dive::v1::api::Client as OpenAIClient;
 use wk_371tti_net_crawler::Client as ScraperClient;
 use serenity::{Client as DiscordClient, all::GatewayIntents};
 
-use crate::{channel::ChatContexts, commands::{ask, clear, disable, enable, model, ping}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
+use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
 
 #[derive(Clone)]
 pub struct ObserverContext {
@@ -16,6 +16,32 @@ pub struct ObserverContext {
     pub chat_contexts: Arc<ChatContexts>,
     pub user_contexts: Arc<UserContexts>,
     pub tools: Arc<HashMap<String, Box<dyn LMTool>>>,
+    pub discord_client: Arc<DiscordContextWrapper>,
+}
+
+/// DiscordContext を全体共有するための頭の悪いラッパー
+pub struct DiscordContextWrapper {
+    pub inner: RwLock<Option<Arc<DisabledContextWrapperInner>>>,
+}
+
+impl DiscordContextWrapper {
+    pub fn open(&self) -> Arc<DisabledContextWrapperInner> {
+        self.inner.read().expect("RWlock").clone().expect("inisializing").clone()
+    }
+    pub fn lazy() -> DiscordContextWrapper {
+        DiscordContextWrapper {
+            inner: RwLock::new(None),
+        }
+    }
+    pub fn set(&self, ctx: Arc<DisabledContextWrapperInner>) {
+        let mut w = self.inner.write().expect("RWlock");
+        *w = Some(ctx);
+    }
+}
+
+pub struct DisabledContextWrapperInner {
+    pub http: Arc<serenity::http::Http>,
+    pub cache: Arc<serenity::cache::Cache>,
 }
 
 impl ObserverContext {
@@ -25,6 +51,13 @@ impl ObserverContext {
         let lm_client = LMClient::new(OpenAIClient::new(config.openai_api_key.clone()));
         let tools: HashMap<String, Box<dyn LMTool>> = vec![
             Box::new(tools::get_time::GetTime::new()) as Box<dyn LMTool>,
+            Box::new(tools::browser::Browser::new()) as Box<dyn LMTool>,
+            Box::new(tools::discord::DiscordToolReaction::new()) as Box<dyn LMTool>,
+            Box::new(tools::discord::DiscordToolThread::new()) as Box<dyn LMTool>,
+            Box::new(tools::discord::DiscordToolFetchMessage::new()) as Box<dyn LMTool>,
+            Box::new(tools::discord::DiscordToolSendMessage::new()) as Box<dyn LMTool>,
+            Box::new(tools::discord::DiscordToolSearchMessages::new()) as Box<dyn LMTool>,
+            Box::new(tools::discord::DiscordToolEditMessage::new()) as Box<dyn LMTool>,
         ]
         .into_iter()
         .map(|tool| (tool.name(), tool))
@@ -37,6 +70,7 @@ impl ObserverContext {
             chat_contexts: Arc::new(ChatContexts::new()),
             user_contexts: Arc::new(UserContexts::new()),
             tools: Arc::new(tools),
+            discord_client: Arc::new(DiscordContextWrapper::lazy()),
         }
     }
 
@@ -54,7 +88,6 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
             .options(poise::FrameworkOptions {
                 commands: vec![
                     ping(),  // ここにコマンドを追加
-                    ask(),
                     enable(),
                     clear(),
                     disable(),
@@ -73,6 +106,10 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
             // 起動時に一度だけ呼ばれるセットアップ処理
             .setup(|ctx, _ready, framework| {
                 Box::pin(async move {
+                    ob_ctx.discord_client.set(Arc::new(DisabledContextWrapperInner {
+                        http: ctx.http.clone(),
+                        cache: ctx.cache.clone(),
+                    }));
                     // Slash コマンドをグローバル登録
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                     println!("Bot is ready!");
@@ -93,7 +130,9 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
             .framework(framework);
 
         tokio::spawn(async move {
-            discord_client.await.expect("Error creating client").start().await.expect("Error starting client");
+            let mut c = discord_client.await.expect("Error creating client");
+            c.start().await.expect("Error starting client");
+            
         });
 
     }

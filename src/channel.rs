@@ -41,6 +41,17 @@ impl ChatContexts {
     pub fn marge(&self, channel_id: ChannelId, other: &LMContext) {
         if let Some(mut entry) = self.contexts.get_mut(&channel_id) {
             entry.context.extend(other);
+        } else {
+            let mut new_context = LMContext::new();
+            new_context.extend(other);
+            self.contexts.insert(
+                channel_id,
+                ChatContext {
+                    channel_id,
+                    context: new_context,
+                    enabled: false,
+                },
+            );
         }
     }
 

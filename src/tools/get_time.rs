@@ -4,7 +4,7 @@ use chrono_tz::Tz;
 use log::info;
 use std::collections::HashMap;
 
-use crate::lmclient::LMTool;
+use crate::{context::ObserverContext, lmclient::LMTool};
 
 pub struct GetTime {}
 
@@ -97,6 +97,7 @@ impl GetTime {
     }
 }
 
+#[async_trait::async_trait]
 impl LMTool for GetTime {
     fn name(&self) -> String {
         "get-location-time".to_string()
@@ -123,7 +124,7 @@ impl LMTool for GetTime {
         })
     }
 
-    fn execute(&self, args: serde_json::Value) -> Result<String, String> {
+    async fn execute(&self, args: serde_json::Value, _ob_ctx: ObserverContext) -> Result<String, String> {
         info!("GetTime::run called with args: {:?}", args);
         let country_code = args.get("country_code")
             .and_then(|v| v.as_str())

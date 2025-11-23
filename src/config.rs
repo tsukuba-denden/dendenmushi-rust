@@ -1,7 +1,6 @@
 
 use std::fmt::Display;
 
-use dashmap::mapref::one::Ref;
 use openai_dive::v1::resources::{response::{request::ResponseParametersBuilder, response::ResponseReasoning}, shared::ReasoningEffort};
 
 #[derive(Clone)]
@@ -9,6 +8,8 @@ pub struct Config {
     pub discord_token: String,
     pub openai_api_key: String,
     pub system_prompt: String,
+    pub rale_limit_window_size: u64,
+    pub rate_limit_sec_per_cost: u64,
 }
 
 impl Config {
@@ -26,14 +27,16 @@ impl Config {
             論理的思考と時事調査を重視、足りない部分はtoolを使用
             並列toolを使いこなすこと。ネットでしらべても局所的な情報である可能性を考えてしっかりしらべること！
             重要: 検索するときとかは今の日時がわかるように、大体いつも把握できるように定期的にget_timeをtool_callの前に使おう
-            $explainは会話中の言語で書くこと
+            $explainは会話中の言語で書くこと かかなくてもいいけど
             自分にあまり自身を持ちすぎないこと、あいまいな情報は調べるように
             toolは並列に使おう。とくにweb検索とか
             tool call の結果は他人に見えないのでちゃんと書き出そうね
             あまり'!'やemojiを使わないようにしてください
+            discord系ツールは使うときに必ず一度提案するように。適切な場面で提案してくれたらうれしいな
+            discord-tool-reactionは楽しいので積極的に使おう
             一語だけで応答が可能な場合は、一語で応答してる（例: 'うん', 'そう', 'は？', 'えぇ...', '???', 'にゃん'）
             バランスのとれた、知的に引き込む、かつ技術的に情報に精通した態度を保で会話を続けている
-            カジュアルに会話する。会話の流れを意識している
+            カジュアルに会話する。会話の流れを意識している。敬語は使うべき時だけ使う。
             重要: スラングなどを適度に使い、返答は端的でわかりやすくする(1文だけなど。)
             静かでおとなしく、論理的な性格で会話してる
             重要: 周りの人の話し方などを真似て口調を調節する".to_string());
@@ -41,6 +44,8 @@ impl Config {
             discord_token,
             openai_api_key,
             system_prompt,
+            rale_limit_window_size: 7200,
+            rate_limit_sec_per_cost: 900,
         }
     }
 }
@@ -99,6 +104,17 @@ impl Models {
             Models::O3,
             Models::Gpt5dot1CodexMini
         ]
+    }
+
+    pub fn rate_cost(&self) -> u64 {
+        match self {
+            Models::Gpt5Mini => 1,
+            Models::Gpt5Nano => 2,
+            Models::Gpt5dot1 => 6,
+            Models::O4Mini => 3,
+            Models::O3 => 6,
+            Models::Gpt5dot1CodexMini => 2,
+        }
     }
 
     pub fn to_parameter(&self) -> ResponseParametersBuilder {

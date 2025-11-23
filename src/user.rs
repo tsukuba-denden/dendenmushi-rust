@@ -11,6 +11,7 @@ pub struct UserContexts {
 pub struct UserContext {
     pub user_id: UserId,
     pub main_model: Models,
+    pub rate_line: u64,
 }
 
 impl UserContext {
@@ -18,6 +19,7 @@ impl UserContext {
         UserContext {
             user_id,
             main_model: Models::Gpt5Nano,
+            rate_line: 0,
         }
     }
 }
@@ -41,5 +43,12 @@ impl UserContexts {
             .entry(user_id)
             .or_insert_with(|| UserContext::new(user_id))
             .main_model = model;
+    }
+
+    pub fn set_rate_line(&self, user_id: UserId, rate_line: u64) {
+        self.contexts
+            .entry(user_id)
+            .or_insert_with(|| UserContext::new(user_id))
+            .rate_line = rate_line;
     }
 }
