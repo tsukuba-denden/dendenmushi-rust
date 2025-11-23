@@ -216,14 +216,14 @@ async fn handle_message(
                 
             }
             _ = async {
-                let mut last_edit = Instant::now() + Duration::from_millis(1000);      // 前回 edit した時間
+                let mut last_edit = Instant::now() + Duration::from_millis(550);      // 前回 edit した時間
                 let mut swap = String::new();          // 状態保存用バッファ
 
                 while let Some(state) = state_rx.recv().await {
                     swap = state;
 
                     // 1秒未満ならまだ edit しない
-                    if last_edit.elapsed() < Duration::from_millis(1000) {
+                    if last_edit.elapsed() < Duration::from_millis(550) {
                         continue;
                     }
 
@@ -255,9 +255,11 @@ async fn handle_message(
         // タイピング通知停止
         typing_handle.abort();
 
+        let model = ob_context.user_contexts.get_or_create(user_id).main_model;
+
         // 「Thinking...」を書き換えて最終回答を表示
         thinking_msg
-            .edit(&ctx.http, EditMessage::new().content("-# Reasoning done"))
+            .edit(&ctx.http, EditMessage::new().content(format!("-# Reasoning done in {}ms, model: {}", elapsed, model)))
             .await?;
         msg.channel_id
             .send_message(&ctx.http, CreateMessage::new().content(text.clone()))

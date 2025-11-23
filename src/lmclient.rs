@@ -87,7 +87,6 @@ impl LMClient {
                         info!("Response in progress (seq {})", sequence_number);
                     },
                     ResponseStreamEvent::ResponseCompleted { sequence_number, response: _ } => {
-                        state_send(format!("Response completed! (seq {})", sequence_number));
                         info!("Response completed (seq {})", sequence_number);
                         break;
                     },
@@ -113,6 +112,7 @@ impl LMClient {
                                 );
                             },
                             ResponseOutput::FunctionToolCall(function_tool_call) => {
+                            state_send(format!("Function tool call: {}", function_tool_call.name));
                                 delta_context.add_input_item(InputItem::FunctionToolCall(
                                     function_tool_call.into()
                                 ));
