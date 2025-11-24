@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use log::{error, info};
 use poise::CreateReply;
-use serenity::all::{CreateAttachment, UserId};
+use serenity::all::{CreateAttachment, User, UserId};
 
 use crate::{config::Models, context::ObserverContext, tools::latex::LatexExprRenderTool};
 
@@ -12,8 +12,11 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 // 毎回書くのがだるいので type alias
 type Context<'a> = poise::Context<'a, ObserverContext, Error>;
 
+/// ping pong..
 #[poise::command(slash_command, prefix_command)]
-pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn ping(
+    ctx: Context<'_>
+) -> Result<(), Error> {
     let start = Instant::now();
 
     // まずメッセージ送信
@@ -31,43 +34,59 @@ pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// only admin user
 #[poise::command(slash_command, prefix_command)]
 pub async fn rate_config(
     ctx: Context<'_>,
-    #[description = "Target user ID"] user_id_str: String,
-    #[description = "unlimit or consumption cost"] limit: String,
+
+    #[description = "Target user"]
+    target_user: User,  // ← ここが Discord のユーザー選択になる
+
+    #[description = "consumption cost value: 'unlimit' or a number"]
+    #[autocomplete = "autocomplete_rate_limit"]
+    limit: String,
 ) -> Result<(), Error> {
     let ob_ctx = ctx.data();
 
-    let user_id = match user_id_str.parse::<u64>() {
-        Ok(v) => UserId::new(v),
-        Err(_) => {
-            ctx.say("Err: Invalid user ID").await?;
-            return Ok(());
-        }
-    };
+    let caller_id_u64 = ctx.author().id.get();
+    if !ob_ctx.config.admin_users.contains(&caller_id_u64) {
+        ctx.say("Err: you are not allowed to use /rate_config.").await?;
+        return Ok(());
+    }
 
-    let new_rate_line = if limit.to_lowercase() == "unlimit" {
-        0 // unlimit を 0 として扱う（既存仕様と合わせる）
+    let target_user_id: UserId = target_user.id;
+
+    let new_rate_line: u64 = if limit.eq_ignore_ascii_case("unlimit") {
+        0
+    } else if limit.eq_ignore_ascii_case("reset") {
+        1
     } else {
-        match limit.parse::<u64>() {
+        let cost = match limit.parse::<u64>() {
             Ok(n) => n,
             Err(_) => {
-                ctx.say("Err: limit must be 'unlimit' or number").await?;
+                ctx.say("Err: limit must be 'unlimit' or a number.").await?;
                 return Ok(());
             }
-        }
+        };
+        ob_ctx.user_contexts.get_or_create(target_user_id).rate_line + cost * ob_ctx.config.rate_limit_sec_per_cost
     };
 
-    // --- 3. 設定書き換え ---
-    ob_ctx.user_contexts.set_rate_line(user_id, new_rate_line);
+    ob_ctx.user_contexts.set_rate_line(target_user_id, new_rate_line);
 
     let reply = if new_rate_line == 0 {
-        format!("info: Set rate-line for <@{}> to **unlimit**", user_id)
+        format!(
+            "info: Set rate-line for user `{}` to **unlimit**.",
+            target_user_id
+                .to_user(ctx.http())
+                .await
+                .map(|u| u.display_name().to_string())
+                .unwrap_or_else(|_| "Null".to_string())
+        )
     } else {
         format!(
-            "info: Set rate-line for <@{}> to **{}**",
-            user_id, new_rate_line
+            "info: Set rate-line for user `{}` to **{}**.",
+            target_user_id.to_user(ctx.http()).await.map(|u| u.display_name().to_string()).unwrap_or_else(|_| "Null".to_string()),
+            new_rate_line
         )
     };
 
@@ -76,6 +95,43 @@ pub async fn rate_config(
 }
 
 
+/// `/rate_config` の第2引数 `limit` 用のオートコンプリート
+async fn autocomplete_rate_limit(
+    _ctx: Context<'_>,
+    partial: &str,
+) -> Vec<String> {
+    let base_candidates = [
+        "unlimit",
+        "reset",
+        "1",
+        "2",
+        "3",
+        "5",
+        "10",
+        "30",
+        "60",
+        "120",
+        "300",
+        "600",
+        "1800",
+        "3600",
+    ];
+
+    let p = partial.to_lowercase();
+
+    let mut out: Vec<String> = base_candidates
+        .iter()
+        .filter(|v| v.to_lowercase().starts_with(&p))
+        .map(|v| v.to_string())
+        .collect();
+
+    out.sort();
+    out.dedup();
+    out.truncate(20);
+    out
+}
+
+/// clear context
 #[poise::command(slash_command, prefix_command)]
 pub async fn clear(ctx: Context<'_>) -> Result<(), Error> {
     let channel_id = ctx.channel_id();
@@ -91,6 +147,7 @@ pub async fn clear(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// to enable observer bot
 #[poise::command(slash_command, prefix_command)]
 pub async fn enable(ctx: Context<'_>) -> Result<(), Error> {
     let channel_id = ctx.channel_id();
@@ -109,6 +166,7 @@ pub async fn enable(ctx: Context<'_>) -> Result<(), Error> {
     }
 }
 
+/// to disable observer bot
 #[poise::command(slash_command, prefix_command)]
 pub async fn disable(ctx: Context<'_>) -> Result<(), Error> {
     let channel_id = ctx.channel_id();
@@ -126,6 +184,7 @@ pub async fn disable(ctx: Context<'_>) -> Result<(), Error> {
     }
 }
 
+/// model config command
 #[poise::command(slash_command, prefix_command, subcommands("get", "set", "list"))]
 pub async fn model(_: Context<'_>) -> Result<(), Error> {
     Ok(()) // ここはメインでは使わない
@@ -181,7 +240,7 @@ async fn autocomplete_model_name(
         .collect()
 }
 
-
+/// latex expr render
 #[poise::command(slash_command, prefix_command)]
 pub async fn tex_expr(
     ctx: Context<'_>,

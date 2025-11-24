@@ -6,7 +6,7 @@ use openai_dive::v1::api::Client as OpenAIClient;
 use wk_371tti_net_crawler::Client as ScraperClient;
 use serenity::{Client as DiscordClient, all::GatewayIntents};
 
-use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, tex_expr}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
+use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, rate_config, tex_expr}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
 
 #[derive(Clone)]
 pub struct ObserverContext {
@@ -94,6 +94,7 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
                     disable(),
                     model(),
                     tex_expr(),
+                    rate_config()
                 ],
                 // prefix の設定（!ping とか）
                 prefix_options: poise::PrefixFrameworkOptions {

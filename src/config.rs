@@ -13,6 +13,7 @@ pub struct Config {
     pub web_server_host: [u8; 4],
     pub web_server_local_ip: [u8; 4],
     pub web_server_port: u16,
+    pub admin_users: Vec<u64>,
 }
 
 impl Config {
@@ -52,6 +53,7 @@ discord-tool-reactionは 🫠,😱,👍,👈,🤔 をメインに使って
             web_server_host: [0, 0, 0, 0],
             web_server_local_ip: [192, 168, 0, 26],
             web_server_port: 96,
+            admin_users: vec![855371530270408725]
         }
     }
 }
