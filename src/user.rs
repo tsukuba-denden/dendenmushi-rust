@@ -19,7 +19,7 @@ impl UserContext {
         UserContext {
             user_id,
             main_model: Models::O4Mini,
-            rate_line: 0,
+            rate_line: 1,
         }
     }
 }

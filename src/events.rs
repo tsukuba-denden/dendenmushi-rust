@@ -155,9 +155,12 @@ async fn handle_message(
         };
 
         if added_user_line > limit_line {
+            let wait_sec = added_user_line - limit_line;
+            let allow_ts = time_stamp + wait_sec;
             msg.channel_id
-                .send_message(&ctx.http, CreateMessage::new().content(format!("Err: rate limit - try again after <t:{}:R>", (added_user_line - limit_line))))
+                .send_message(&ctx.http, CreateMessage::new().content(format!("Err: rate limit - try again after <t:{}:R>", allow_ts)))
                 .await?;
+            return Ok(());
         }
         ob_context.user_contexts.set_rate_line(user_id, added_user_line);
 
