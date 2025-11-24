@@ -6,7 +6,7 @@ use openai_dive::v1::api::Client as OpenAIClient;
 use wk_371tti_net_crawler::Client as ScraperClient;
 use serenity::{Client as DiscordClient, all::GatewayIntents};
 
-use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
+use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, tex_expr}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
 
 #[derive(Clone)]
 pub struct ObserverContext {
@@ -58,6 +58,7 @@ impl ObserverContext {
             Box::new(tools::discord::DiscordToolSendMessage::new()) as Box<dyn LMTool>,
             Box::new(tools::discord::DiscordToolSearchMessages::new()) as Box<dyn LMTool>,
             Box::new(tools::discord::DiscordToolEditMessage::new()) as Box<dyn LMTool>,
+            Box::new(tools::latex::LatexExprRenderTool::new()) as Box<dyn LMTool>,
         ]
         .into_iter()
         .map(|tool| (tool.name(), tool))
@@ -91,7 +92,8 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
                     enable(),
                     clear(),
                     disable(),
-                    model()
+                    model(),
+                    tex_expr(),
                 ],
                 // prefix の設定（!ping とか）
                 prefix_options: poise::PrefixFrameworkOptions {

@@ -1,6 +1,5 @@
 use std::{error::Error, time::{Duration, Instant}};
 
-use chrono::format;
 use log::{debug, info};
 use openai_dive::v1::resources::response::{request::{ContentInput, ContentItem, ImageDetailLevel, InputMessage}, response::Role};
 use serenity::all::{ActivityData, CreateMessage, EditMessage, FullEvent, Message};
@@ -30,6 +29,10 @@ pub async fn event_handler(
             info!("Joined new guild: {} (id: {})", guild.name, guild.id);
             update_presence(ctx).await;
         }
+        FullEvent::ReactionAdd { add_reaction } => {
+            debug!("Reaction added: {:?} by user {:?}", add_reaction.emoji, add_reaction.user_id);
+            handle_emoji_reaction(add_reaction, data).await?;
+        }
 
         _ => { /* 他のイベントは無視 */ }
     }
@@ -44,6 +47,33 @@ async fn update_presence(ctx: &serenity::client::Context) {
     ctx.set_activity(Some(ActivityData::playing(
         format!("in {} servers", guild_count)
     )));
+}
+
+async fn handle_emoji_reaction(
+    reaction: &serenity::model::channel::Reaction,
+    ob_context: &ObserverContext
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    // ここでリアクション追加時の処理を実装可能
+    let channel_id = reaction.channel_id;
+    let message_id = reaction.message_id;
+    let member = reaction.member.clone().unwrap_or_default();
+    let user_id = member.user.name.clone();
+    let user_display_name = member.user.display_name().to_string();
+    let mut lm_context = LMContext::new();
+    lm_context.add_text(
+        serde_json::json!({
+            "user": user_id,
+            "display_name": user_display_name,
+            "added_reaction": format!("{:?}", reaction.emoji),
+            "message_id": message_id.to_string(),
+            "channel_id": channel_id.to_string()
+        }).to_string(),
+        Role::User,
+    );
+    ob_context.chat_contexts.marge(channel_id, &lm_context);
+
+    debug!("Handling emoji reaction: {:?} by user {:?}", reaction.emoji, reaction.user_id);
+    Ok(())
 }
 
 
@@ -65,14 +95,13 @@ async fn handle_message(
 
     let is_mentioned = msg.mentions_user_id(bot_id);
 
-    let content = format!(
-        "user: {}, display_name: {}, msg_id: {}, replay_to: {}\n{}", 
-        msg.author.name, 
-        msg.author.display_name(),
-        msg.id,
-        msg.referenced_message.as_ref().map_or("None".to_string(), |m| m.id.to_string()),
-        msg.content
-    );
+    let content = serde_json::json!({
+        "user": msg.author.name,
+        "display_name": msg.author.display_name(),
+        "msg_id": msg.id.to_string(),
+        "reply_to": msg.referenced_message.as_ref().map_or("None".to_string(), |m| m.id.to_string()),
+        "content": msg.content
+    }).to_string();
 
     // 添付画像のURLを取る
     let image_urls: Vec<String> = msg

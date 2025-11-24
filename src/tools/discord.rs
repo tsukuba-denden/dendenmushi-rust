@@ -46,10 +46,6 @@ impl LMTool for DiscordToolReaction {
                     "type": "string",
                     "description": "Emoji for reactions . Unicode (e.g. 🫠,😱,👍,👈,🤔) or custom emoji ID.",
                 },
-                "$explain": {
-                    "type": "string",
-                    "description": "A brief explanation of what you are doing with this tool."
-                }
             },
             "required": ["action", "channel_id", "message_id", "reaction"]
         })
@@ -136,10 +132,6 @@ impl LMTool for DiscordToolThread {
                     "description": "Type of the thread: 'public' or 'private'. Defaults to 'public'.",
                     "enum": ["public", "private"]
                 },
-                "$explain": {
-                    "type": "string",
-                    "description": "A brief explanation of what you are doing with this tool."
-                }
             },
             "required": ["channel_id", "name"]
         })
@@ -254,10 +246,6 @@ impl LMTool for DiscordToolSendMessage {
                     "type": "string",
                     "description": "Optional message ID to reply to."
                 },
-                "$explain": {
-                    "type": "string",
-                    "description": "A brief explanation of what you are doing with this tool."
-                }
             },
             "required": ["channel_id", "content"]
         })

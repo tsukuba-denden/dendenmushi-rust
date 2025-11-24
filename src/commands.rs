@@ -2,8 +2,9 @@ use std::time::Instant;
 
 use log::{error, info};
 use poise::CreateReply;
+use serenity::all::{CreateAttachment, UserId};
 
-use crate::{config::Models, context::ObserverContext};
+use crate::{config::Models, context::ObserverContext, tools::latex::LatexExprRenderTool};
 
 // エラー型（とりあえず Box に投げるスタイルでOK）
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -29,6 +30,51 @@ pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     Ok(())
 }
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn rate_config(
+    ctx: Context<'_>,
+    #[description = "Target user ID"] user_id_str: String,
+    #[description = "unlimit or consumption cost"] limit: String,
+) -> Result<(), Error> {
+    let ob_ctx = ctx.data();
+
+    let user_id = match user_id_str.parse::<u64>() {
+        Ok(v) => UserId::new(v),
+        Err(_) => {
+            ctx.say("Err: Invalid user ID").await?;
+            return Ok(());
+        }
+    };
+
+    let new_rate_line = if limit.to_lowercase() == "unlimit" {
+        0 // unlimit を 0 として扱う（既存仕様と合わせる）
+    } else {
+        match limit.parse::<u64>() {
+            Ok(n) => n,
+            Err(_) => {
+                ctx.say("Err: limit must be 'unlimit' or number").await?;
+                return Ok(());
+            }
+        }
+    };
+
+    // --- 3. 設定書き換え ---
+    ob_ctx.user_contexts.set_rate_line(user_id, new_rate_line);
+
+    let reply = if new_rate_line == 0 {
+        format!("info: Set rate-line for <@{}> to **unlimit**", user_id)
+    } else {
+        format!(
+            "info: Set rate-line for <@{}> to **{}**",
+            user_id, new_rate_line
+        )
+    };
+
+    ctx.say(reply).await?;
+    Ok(())
+}
+
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn clear(ctx: Context<'_>) -> Result<(), Error> {
@@ -134,6 +180,95 @@ async fn autocomplete_model_name(
         .map(|m| m.to_string())
         .collect()
 }
+
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn tex_expr(
+    ctx: Context<'_>,
+    #[description = "LaTeX expression to render"]
+    #[autocomplete = "autocomplete_tex_expr"]
+    expr: String,
+) -> Result<(), Error> {
+    let ob_ctx = ctx.data();
+
+    // レンダリング実行（ヘッドレスブラウザ経由）
+    let png_bytes = match LatexExprRenderTool::render(&expr, ob_ctx).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            error!("Failed to render LaTeX expression `{}`: {}", expr, e);
+            ctx.say(format!("error: Failed to render LaTeX expression: {}", e))
+            .await?;
+            return Ok(());
+        }
+    };
+
+    let attachment = CreateAttachment::bytes(png_bytes, "tex_expr.png");
+
+    ctx.send(
+        CreateReply::default()
+            .attachment(attachment)
+    )
+    .await?;
+
+    Ok(())
+}
+
+async fn autocomplete_tex_expr(
+    _ctx: Context<'_>,
+    partial: &str,
+) -> Vec<String> {
+    // LaTeX コマンド単体候補
+    const COMMANDS: &[&str] = &[
+        r"\alpha", r"\beta", r"\gamma", r"\delta",
+        r"\sin", r"\cos", r"\tan",
+        r"\log", r"\ln",
+        r"\sqrt{}", r"\frac{}{}",
+        r"\int_0^1", r"\sum_{n=0}^{\infty}", r"\prod_{i=1}^{n}",
+        r"\lim_{x \to 0}", r"\infty",
+        r"\mathbb{R}", r"\mathbb{Z}", r"\mathbb{N}",
+    ];
+
+    // ある程度完成された数式テンプレ
+    const SNIPPETS: &[&str] = &[
+        r"\int_0^1 x^2 \, dx",
+        r"\sum_{n=0}^{\infty} a_n x^n",
+        r"\lim_{x \to 0} \frac{\sin x}{x}",
+        r"e^{i\pi} + 1 = 0",
+        r"a^2 + b^2 = c^2",
+        r"\frac{d}{dx} f(x)",
+        r"\nabla \cdot \vec{E} = \frac{\rho}{\varepsilon_0}",
+    ];
+
+    let mut candidates: Vec<String> = Vec::new();
+
+    // まずコマンド候補
+    for &c in COMMANDS {
+        if partial.is_empty()
+            || c.starts_with(partial)
+            || c.contains(partial)
+        {
+            candidates.push(c.to_string());
+        }
+    }
+
+    // つぎにテンプレ数式
+    for &s in SNIPPETS {
+        if partial.is_empty()
+            || s.starts_with(partial)
+            || s.contains(partial)
+        {
+            candidates.push(s.to_string());
+        }
+    }
+
+    // ダブり削除 & 最大 20 個くらいに絞る
+    candidates.sort();
+    candidates.dedup();
+    candidates.truncate(20);
+
+    candidates
+}
+
 
 pub fn log_err(context: &str, err: &(dyn std::error::Error + Send + Sync)) {
     error!("[{context}] {err:#?}");

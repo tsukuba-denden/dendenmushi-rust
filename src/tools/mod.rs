@@ -1,6 +1,7 @@
 pub mod get_time;
 pub mod browser;
 pub mod discord;
+pub mod latex;
 // pub mod www_search;
 // pub mod web_scraper;
 // pub mod memory;
