@@ -242,7 +242,7 @@ impl LMContext {
     pub fn new() -> Self {
         Self {
             buf: VecDeque::new(),
-            max_len: 256,
+            max_len: 64,
         }
     }
 
