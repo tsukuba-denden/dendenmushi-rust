@@ -18,17 +18,21 @@ pub async fn event_handler(
     data: &ObserverContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     match event {
+        // メッセージうけとったとき
         FullEvent::Message { new_message } => {
             handle_message(ctx, new_message, framework, data).await?;
         }
+        // 初期化完了
         FullEvent::Ready { data_about_bot } => {
             info!("Bot is connected as {}", data_about_bot.user.name);
             update_presence(ctx).await;
         }
+        // あたらしいギルドに参加
         FullEvent::GuildCreate { guild, is_new: _ } => {
             info!("Joined new guild: {} (id: {})", guild.name, guild.id);
             update_presence(ctx).await;
         }
+        // リアクション通知
         FullEvent::ReactionAdd { add_reaction } => {
             debug!("Reaction added: {:?} by user {:?}", add_reaction.emoji, add_reaction.user_id);
             handle_emoji_reaction(add_reaction, data).await?;

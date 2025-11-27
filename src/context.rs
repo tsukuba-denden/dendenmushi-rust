@@ -8,14 +8,23 @@ use serenity::{Client as DiscordClient, all::GatewayIntents};
 
 use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, rate_config, tex_expr}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
 
+/// 全体共有コンテキスト
+/// Arcで実装されてるのでcloneは単に参照カウントの増加
 #[derive(Clone)]
 pub struct ObserverContext {
+    /// 言語モデルのクライアント
     pub lm_client: Arc<LMClient>,
+    /// ヘッドレスブラウザのクライアント
     pub scraper: Arc<ScraperClient>,
+    /// 設定
     pub config: Arc<Config>,
+    /// チャットデータのプール
     pub chat_contexts: Arc<ChatContexts>,
+    /// ユーザーデータのプール
     pub user_contexts: Arc<UserContexts>,
+    /// ツールの定義
     pub tools: Arc<HashMap<String, Box<dyn LMTool>>>,
+    /// discordクライアント
     pub discord_client: Arc<DiscordContextWrapper>,
 }
 
@@ -39,6 +48,7 @@ impl DiscordContextWrapper {
     }
 }
 
+// 上のinner
 pub struct DisabledContextWrapperInner {
     pub http: Arc<serenity::http::Http>,
     pub cache: Arc<serenity::cache::Cache>,
@@ -48,6 +58,7 @@ impl ObserverContext {
     pub async fn new() -> ObserverContext {
         let config = Config::new();
 
+        // ツールの定義
         let lm_client = LMClient::new(OpenAIClient::new(config.openai_api_key.clone()));
         let tools: HashMap<String, Box<dyn LMTool>> = vec![
             Box::new(tools::get_time::GetTime::new()) as Box<dyn LMTool>,
@@ -80,9 +91,11 @@ impl ObserverContext {
         Ok(())
     }
 }
+
 #[async_trait::async_trait]
 impl ContextMiddleware<ObserverContext> for ObserverContext {
     async fn init(c: ObserverContext) {
+        // 主にdiscordクライアントの初期化 初期化にctxが必要なのでctxが初期化されてから実行されるようにここ
         info!("Starting Discord bot...");
         let ob_ctx = c.clone();
         let framework = poise::Framework::builder()

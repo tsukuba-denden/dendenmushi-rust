@@ -3,10 +3,12 @@ use serenity::all::ChannelId;
 
 use crate::lmclient::LMContext;
 
+/// チャンネルごとのプール
 pub struct ChatContexts {
     pub contexts: DashMap<ChannelId, ChatContext>,
 }
 
+/// チャンネルごとのデータ保持
 pub struct ChatContext {
     pub channel_id: ChannelId,
     pub context: LMContext,

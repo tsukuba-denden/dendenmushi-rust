@@ -3,6 +3,8 @@ use std::fmt::Display;
 
 use openai_dive::v1::resources::{response::{request::ResponseParametersBuilder, response::ResponseReasoning}, shared::ReasoningEffort};
 
+/// 設定
+/// まだserdeかいてないのでそのままinlineで記述してる
 #[derive(Clone)]
 pub struct Config {
     pub discord_token: String,
@@ -56,6 +58,7 @@ tool_call でない通常メッセージを送ると推論終了するので注�
     }
 }
 
+/// モデルリストの定義
 #[derive(Debug, Clone)]
 pub enum Models {
     Gpt5Mini,

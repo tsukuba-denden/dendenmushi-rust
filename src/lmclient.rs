@@ -11,7 +11,8 @@ pub struct LMClient {
 }
 
 
-
+/// LMのクライアント
+/// レスポンス投げて返すための抽象レイヤ
 impl LMClient {
     pub fn new(client: Client) -> Self {
         Self { client }
@@ -232,6 +233,8 @@ impl LMClient {
     }
 }
 
+/// コンテキスト実態
+/// リングバッファで管理
 #[derive(Debug, Clone)]
 pub struct LMContext {
     pub buf: VecDeque<ResponseInputItem>,

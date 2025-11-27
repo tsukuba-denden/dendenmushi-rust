@@ -3,10 +3,12 @@ use serenity::all::UserId;
 
 use crate::config::Models;
 
+/// ユーザー情報のプール
 pub struct UserContexts {
     pub contexts: DashMap<UserId, UserContext>,
 }
 
+/// ユーザー情報の構造体
 #[derive(Clone)]
 pub struct UserContext {
     pub user_id: UserId,
