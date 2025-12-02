@@ -210,7 +210,7 @@ async fn handle_message(
 
         let system_prompt = format!{
             "{}\n current channel_id: {}, channel_name: {}",
-            ob_context.config.system_prompt,
+            ob_context.chat_contexts.get_system_prompt(channel_id),
             msg.channel_id, 
             msg.channel_id.name(&ctx.http).await.unwrap_or("None".to_string()),
         };

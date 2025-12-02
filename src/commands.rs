@@ -36,6 +36,35 @@ pub async fn ping(
 
 /// only admin user
 #[poise::command(slash_command, prefix_command)]
+pub async fn set_system_prompt(
+    ctx: Context<'_>,
+
+    #[description = "System prompt to set (or 'reset' to default)"]
+    system_prompt: String,
+) -> Result<(), Error> {
+    let ob_ctx = ctx.data();
+
+    let caller_id_u64 = ctx.author().id.get();
+    if !ob_ctx.config.admin_users.contains(&caller_id_u64) {
+        ctx.say("Err: you are not allowed to use /set_system_prompt.").await?;
+        return Ok(());
+    }
+
+    let channel_id = ctx.channel_id();
+
+    if system_prompt.eq_ignore_ascii_case("reset") {
+        ob_ctx.chat_contexts.set_system_prompt(channel_id, None);
+        ctx.say("info: System prompt reset to default.").await?;
+    } else {
+        ob_ctx.chat_contexts.set_system_prompt(channel_id, Some(system_prompt.clone()));
+        ctx.say(format!("info: System prompt set to:\n```{}```", system_prompt)).await?;
+    }
+
+    Ok(())
+}
+
+/// only admin user
+#[poise::command(slash_command, prefix_command)]
 pub async fn rate_config(
     ctx: Context<'_>,
 

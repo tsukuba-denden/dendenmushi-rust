@@ -6,7 +6,7 @@ use openai_dive::v1::api::Client as OpenAIClient;
 use wk_371tti_net_crawler::Client as ScraperClient;
 use serenity::{Client as DiscordClient, all::GatewayIntents};
 
-use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, rate_config, tex_expr}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
+use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, rate_config, set_system_prompt, tex_expr}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
 
 /// 全体共有コンテキスト
 /// Arcで実装されてるのでcloneは単に参照カウントの増加
@@ -78,8 +78,8 @@ impl ObserverContext {
         ObserverContext {
             lm_client: Arc::new(lm_client),
             scraper: Arc::new(ScraperClient::new("http://192.168.0.81")),
-            config: Arc::new(config),
-            chat_contexts: Arc::new(ChatContexts::new()),
+            config: Arc::new(config.clone()),
+            chat_contexts: Arc::new(ChatContexts::new(config.system_prompt.clone())),
             user_contexts: Arc::new(UserContexts::new()),
             tools: Arc::new(tools),
             discord_client: Arc::new(DiscordContextWrapper::lazy()),
@@ -107,7 +107,8 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
                     disable(),
                     model(),
                     tex_expr(),
-                    rate_config()
+                    rate_config(),
+                    set_system_prompt(),
                 ],
                 // prefix の設定（!ping とか）
                 prefix_options: poise::PrefixFrameworkOptions {

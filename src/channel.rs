@@ -6,12 +6,14 @@ use crate::lmclient::LMContext;
 /// チャンネルごとのプール
 pub struct ChatContexts {
     pub contexts: DashMap<ChannelId, ChatContext>,
+    pub default_system_prompt: String,
 }
 
 /// チャンネルごとのデータ保持
 pub struct ChatContext {
     pub channel_id: ChannelId,
     pub context: LMContext,
+    pub system_prompt: Option<String>,
     pub enabled: bool,
 }
 
@@ -20,15 +22,17 @@ impl ChatContext {
         ChatContext {
             channel_id,
             context: LMContext::new(),
+            system_prompt: None,
             enabled: false,
         }
     }
 }
 
 impl ChatContexts {
-    pub fn new() -> ChatContexts {
+    pub fn new(default_system_prompt: String) -> ChatContexts {
         ChatContexts {
             contexts: DashMap::new(),
+            default_system_prompt,
         }
     }
 
@@ -38,6 +42,21 @@ impl ChatContexts {
             .or_insert_with(|| ChatContext::new(channel_id))
             .context
             .clone()
+    }
+
+    pub fn get_system_prompt(&self, channel_id: ChannelId) -> String {
+        self.contexts
+            .get(&channel_id)
+            .and_then(|entry| entry.system_prompt.clone())
+            .unwrap_or_else(|| self.default_system_prompt.clone())
+    }
+
+    pub fn set_system_prompt(&self, channel_id: ChannelId, system_prompt: Option<String>) {
+        let mut entry = self
+            .contexts
+            .entry(channel_id)
+            .or_insert_with(|| ChatContext::new(channel_id));
+        entry.system_prompt = system_prompt;
     }
 
     pub fn marge(&self, channel_id: ChannelId, other: &LMContext) {
@@ -51,6 +70,7 @@ impl ChatContexts {
                 ChatContext {
                     channel_id,
                     context: new_context,
+                    system_prompt: None,
                     enabled: false,
                 },
             );
