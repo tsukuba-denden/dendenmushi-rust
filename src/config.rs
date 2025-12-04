@@ -16,6 +16,7 @@ pub struct Config {
     pub web_server_local_ip: [u8; 4],
     pub web_server_port: u16,
     pub admin_users: Vec<u64>,
+    pub timeout_millis: u64,
 }
 
 impl Config {
@@ -54,7 +55,8 @@ tool_call でない通常メッセージを送ると推論終了するので注�
             web_server_host: [0, 0, 0, 0],
             web_server_local_ip: [192, 168, 0, 26],
             web_server_port: 96,
-            admin_users: vec![855371530270408725]
+            admin_users: vec![855371530270408725],
+            timeout_millis: 100_000,
         }
     }
 }

@@ -63,12 +63,7 @@ impl ObserverContext {
         let tools: HashMap<String, Box<dyn LMTool>> = vec![
             Box::new(tools::get_time::GetTime::new()) as Box<dyn LMTool>,
             Box::new(tools::browser::Browser::new()) as Box<dyn LMTool>,
-            Box::new(tools::discord::DiscordToolReaction::new()) as Box<dyn LMTool>,
-            Box::new(tools::discord::DiscordToolThread::new()) as Box<dyn LMTool>,
-            Box::new(tools::discord::DiscordToolFetchMessage::new()) as Box<dyn LMTool>,
-            Box::new(tools::discord::DiscordToolSendMessage::new()) as Box<dyn LMTool>,
-            Box::new(tools::discord::DiscordToolSearchMessages::new()) as Box<dyn LMTool>,
-            Box::new(tools::discord::DiscordToolEditMessage::new()) as Box<dyn LMTool>,
+            Box::new(tools::discord::DiscordTool::new()) as Box<dyn LMTool>,
             Box::new(tools::latex::LatexExprRenderTool::new()) as Box<dyn LMTool>,
         ]
         .into_iter()

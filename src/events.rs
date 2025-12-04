@@ -234,6 +234,8 @@ async fn handle_message(
 
         let mut result = None;
 
+        let timeout_duration = Duration::from_millis(ob_context.config.timeout_millis);
+
             
         tokio::select! {
             biased;
@@ -258,7 +260,6 @@ async fn handle_message(
                 while let Some(state) = state_rx.recv().await {
                     swap = state;
 
-                    // 1秒未満ならまだ edit しない
                     if last_edit.elapsed() < Duration::from_millis(550) {
                         continue;
                     }
@@ -276,6 +277,14 @@ async fn handle_message(
                     info!("Delta received: {}", delta);
                 }
             } => {}
+            _ = sleep(timeout_duration) => {
+                thinking_msg
+                    .edit(&ctx.http, EditMessage::new().content("-# Error timeout"))
+                    .await
+                    .ok();
+                typing_handle.abort();
+                return Ok(());
+            }
         }
     
         let result = result.unwrap();
