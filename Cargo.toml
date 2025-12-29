@@ -9,6 +9,7 @@ kurosabi = "0.5.4"
 tokio = { version = "1.48.0", features = ["full"] }
 reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
 openai_dive = { version = "1.3.3", default-features = false, features = ["stream", "rustls-tls"] }
+
 async-trait = "0.1.89"
 wk-371tti-net-crawler = { path = "wk-371tti-net-crawler", default-features = false, features = ["tls-rustls"] }
 
@@ -35,3 +36,9 @@ chrono-tz = "0.10.4"
 
 [patch.crates-io]
 openai_dive = { path = "openai-client/openai_dive" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
