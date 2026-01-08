@@ -738,8 +738,16 @@ impl EventHandler for Handler {
                             AIModel::Gemma327bIt.to_model_name(),
                         )
                         .add_string_choice(
-                            AIModel::Gemma227bIt.to_model_discription(),
-                            AIModel::Gemma227bIt.to_model_name(),
+                            AIModel::Gemma312bIt.to_model_discription(),
+                            AIModel::Gemma312bIt.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemma34bIt.to_model_discription(),
+                            AIModel::Gemma34bIt.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemma31bIt.to_model_discription(),
+                            AIModel::Gemma31bIt.to_model_name(),
                         ),
                     ),
             ],

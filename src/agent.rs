@@ -51,7 +51,9 @@ pub enum AIModel {
     Gemini15Pro,
     GeminiFlashLatest,
     Gemma327bIt,
-    Gemma227bIt,
+    Gemma312bIt,
+    Gemma34bIt,
+    Gemma31bIt,
 }
 
 impl AIModel {
@@ -64,7 +66,9 @@ impl AIModel {
             AIModel::Gemini25FlashLite,
             AIModel::Gemini20FlashLite,
             AIModel::Gemma327bIt,
-            AIModel::Gemma227bIt,
+            AIModel::Gemma312bIt,
+            AIModel::Gemma34bIt,
+            AIModel::Gemma31bIt,
         ]
     }
 
@@ -85,7 +89,9 @@ impl AIModel {
             AIModel::Gemini15Pro => "gemini-1.5-pro".to_string(),
             AIModel::GeminiFlashLatest => "gemini-flash-latest".to_string(),
             AIModel::Gemma327bIt => "gemma-3-27b-it".to_string(),
-            AIModel::Gemma227bIt => "gemma-2-27b-it".to_string(),
+            AIModel::Gemma312bIt => "gemma-3-12b-it".to_string(),
+            AIModel::Gemma34bIt => "gemma-3-4b-it".to_string(),
+            AIModel::Gemma31bIt => "gemma-3-1b-it".to_string(),
         }
     }
 
@@ -123,7 +129,9 @@ impl AIModel {
             AIModel::Gemini15Pro => "gemini-1.5-pro: 高性能推論".to_string(),
             AIModel::GeminiFlashLatest => "gemini-flash-latest: 常に最新のFlash系 (将来の2.x/3.x系を自動追随)".to_string(),
             AIModel::Gemma327bIt => "gemma-3-27b-it: Google Gemma 3 27B IT".to_string(),
-            AIModel::Gemma227bIt => "gemma-2-27b-it: Google Gemma 2 27B IT".to_string(),
+            AIModel::Gemma312bIt => "gemma-3-12b-it: Google Gemma 3 12B IT".to_string(),
+            AIModel::Gemma34bIt => "gemma-3-4b-it: Google Gemma 3 4B IT".to_string(),
+            AIModel::Gemma31bIt => "gemma-3-1b-it: Google Gemma 3 1B IT".to_string(),
         }
     }
 
@@ -144,7 +152,9 @@ impl AIModel {
             AIModel::Gemini15Pro => 20,
             AIModel::GeminiFlashLatest => 5,
             AIModel::Gemma327bIt => 20,
-            AIModel::Gemma227bIt => 20,
+            AIModel::Gemma312bIt => 12,
+            AIModel::Gemma34bIt => 4,
+            AIModel::Gemma31bIt => 2,
         }
     }
 
@@ -166,7 +176,9 @@ impl AIModel {
             "gemini-1.5-pro" => Ok(AIModel::Gemini15Pro),
             "gemini-flash-latest" => Ok(AIModel::GeminiFlashLatest),
             "gemma-3-27b-it" => Ok(AIModel::Gemma327bIt),
-            "gemma-2-27b-it" => Ok(AIModel::Gemma227bIt),
+            "gemma-3-12b-it" => Ok(AIModel::Gemma312bIt),
+            "gemma-3-4b-it" => Ok(AIModel::Gemma34bIt),
+            "gemma-3-1b-it" => Ok(AIModel::Gemma31bIt),
             _ => Err(format!("Unknown model name: {}", model_name)),
         }
     }
@@ -361,8 +373,32 @@ impl AIModel {
                 top_p: Some(1.0),
                 web_search_options: None,
             },
-            AIModel::Gemma227bIt => ModelConfig {
-                model: "gemma-2-27b-it".to_string(),
+            AIModel::Gemma312bIt => ModelConfig {
+                model: "gemma-3-12b-it".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: None,
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::Gemma34bIt => ModelConfig {
+                model: "gemma-3-4b-it".to_string(),
+                model_name: Some(ASSISTANT_NAME.to_string()),
+                parallel_tool_calls: None,
+                temperature: None,
+                max_completion_tokens: Some(*MODEL_GENERATE_MAX_TOKENS as u64),
+                reasoning_effort: Some("low".to_string()),
+                presence_penalty: None,
+                strict: Some(false),
+                top_p: Some(1.0),
+                web_search_options: None,
+            },
+            AIModel::Gemma31bIt => ModelConfig {
+                model: "gemma-3-1b-it".to_string(),
                 model_name: Some(ASSISTANT_NAME.to_string()),
                 parallel_tool_calls: None,
                 temperature: None,
