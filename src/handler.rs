@@ -678,6 +678,10 @@ impl EventHandler for Handler {
                         )
                         .required(true)
                         .add_string_choice(
+                            AIModel::Auto.to_model_discription(),
+                            AIModel::Auto.to_model_name(),
+                        )
+                        .add_string_choice(
                             AIModel::MO4Mini.to_model_discription(),
                             AIModel::MO4Mini.to_model_name(),
                         )
@@ -698,8 +702,24 @@ impl EventHandler for Handler {
                             AIModel::M5.to_model_name(),
                         )
                         .add_string_choice(
+                            AIModel::Gemini3FlashPreview.to_model_discription(),
+                            AIModel::Gemini3FlashPreview.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemini25Pro.to_model_discription(),
+                            AIModel::Gemini25Pro.to_model_name(),
+                        )
+                        .add_string_choice(
                             AIModel::Gemini25Flash.to_model_discription(),
                             AIModel::Gemini25Flash.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemini25FlashLite.to_model_discription(),
+                            AIModel::Gemini25FlashLite.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemini20FlashLite.to_model_discription(),
+                            AIModel::Gemini20FlashLite.to_model_name(),
                         )
                         .add_string_choice(
                             AIModel::GeminiFlashLatest.to_model_discription(),
@@ -712,6 +732,14 @@ impl EventHandler for Handler {
                         .add_string_choice(
                             AIModel::Gemini15Pro.to_model_discription(),
                             AIModel::Gemini15Pro.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemma327bIt.to_model_discription(),
+                            AIModel::Gemma327bIt.to_model_name(),
+                        )
+                        .add_string_choice(
+                            AIModel::Gemma227bIt.to_model_discription(),
+                            AIModel::Gemma227bIt.to_model_name(),
                         ),
                     ),
             ],
