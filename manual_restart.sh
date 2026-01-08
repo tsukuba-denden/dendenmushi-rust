@@ -10,24 +10,27 @@ echo "=== Bot手動再起動スクリプト ==="
 echo "実行日時: $(date '+%Y-%m-%d %H:%M:%S')"
 
 # クリーンビルドの選択
+# デフォルトをNo（高速再起動）に変更
 echo ""
-read -p "クリーンビルドを実行しますか？ (Y/n): " -n 1 -r
+read -p "クリーンビルドを実行しますか？ (y/N): " -n 1 -r
 echo    # 改行
 
 RESTART_OPTIONS=""
-if [[ $REPLY =~ ^[Nn]$ ]]; then
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo "通常再起動モード（クリーンビルド実行）"
+    # オプションなし（デフォルトでクリーンビルドされる前提）
+else
     echo "高速再起動モード（クリーンビルドをスキップ）"
     RESTART_OPTIONS="--no-clean"
-else
-    echo "通常再起動モード（クリーンビルド実行）"
 fi
 
 echo ""
 
 # 確認プロンプト
-read -p "Botを再起動しますか？ (y/N): " -n 1 -r
+# デフォルトをYes（実行）に変更
+read -p "Botを再起動しますか？ (Y/n): " -n 1 -r
 echo    # 改行
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+if [[ $REPLY =~ ^[Nn]$ ]]; then
     echo "キャンセルしました。"
     exit 1
 fi
