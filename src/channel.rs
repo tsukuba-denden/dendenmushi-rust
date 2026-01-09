@@ -23,7 +23,7 @@ impl ChatContext {
             channel_id,
             context: LMContext::new(),
             system_prompt: None,
-            enabled: false,
+            enabled: true,
         }
     }
 }
@@ -71,7 +71,7 @@ impl ChatContexts {
                     channel_id,
                     context: new_context,
                     system_prompt: None,
-                    enabled: false,
+                    enabled: true,
                 },
             );
         }
@@ -85,7 +85,7 @@ impl ChatContexts {
         self.contexts
             .get(&channel_id)
             .map(|entry| entry.enabled)
-            .unwrap_or(false)
+            .unwrap_or(true)
     }
 
     pub fn clear(&self, channel_id: ChannelId) {
