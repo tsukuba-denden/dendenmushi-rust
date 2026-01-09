@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
 use log::{debug, error, info, warn};
-use openai_dive::v1::{api::Client, resources::response::{items::{FunctionToolCall, FunctionToolCallOutput, ReasoningSummaryPart}, request::{ContentInput, ContentItem, ImageDetailLevel, InputItem, InputMessage, ResponseInput, ResponseInputItem, ResponseParametersBuilder}, response::{OutputContent, ResponseOutput, ResponseStreamEvent, Role}, shared::{ResponseTool, ResponseToolChoice}}};
+use openai_dive::v1::{api::Client, resources::response::{items::{FunctionToolCall, FunctionToolCallOutput, InputItemStatus, ReasoningSummaryPart}, request::{ContentInput, ContentItem, ImageDetailLevel, InputItem, InputMessage, ResponseInput, ResponseInputItem, ResponseParametersBuilder}, response::{OutputContent, ResponseOutput, ResponseStreamEvent, Role}, shared::{ResponseTool, ResponseToolChoice}}};
 use serenity::futures::{StreamExt};
 use tokio::sync::mpsc;
 
@@ -205,11 +205,13 @@ impl LMClient {
                             call_id: c_id.clone(),
                             output: res,
                             id: None,
+                            status: InputItemStatus::Completed,
                         },
                         Err(err) => FunctionToolCallOutput {
                             call_id: c_id.clone(),
                             output: format!("Error: {}", err),
                             id: None,
+                            status: InputItemStatus::Incomplete,
                         },
                     };
                     outputs.push(output);
