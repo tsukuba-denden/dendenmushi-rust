@@ -1,0 +1,59 @@
+# AES と主要モード (CBC / GCM) 超速メモ
+
+> ざっくり概要を 2 分で把握したい人向け。
+
+## AES とは
+- **Advanced Encryption Standard**（共通鍵暗号）
+- 固定 128bit ブロックを **128/192/256bit 鍵**で N ラウンド処理
+- DES の後継として 2001 年に NIST 採用
+
+## モード運用が鍵 🔑
+AES "そのもの" では 1 ブロック (=16byte) しか暗号化できない。ストリーム化や改ざん検出を実現するために **モード**が必要。
+
+### CBC : Cipher Block Chaining
+| 特徴 | 内容 |
+|------|------|
+| 仕組み | 前ブロック暗号文 ⊕ 次平文 → AES で暗号化 &rarr; 連鎖
+| 必須 | **IV** (初期化ベクトル) ランダムかつ一意
+| 長所 | 実装が簡単・古い環境でも互換性高
+| 短所 | 認証機能なし → *パディング Oracle* 等の改ざん攻撃リスク
+| 対策 | CBC+HMAC など別途 MAC 追加が必須
+
+```text
+C0 = AES(P0 ⊕ IV)
+C1 = AES(P1 ⊕ C0)
+...
+```
+
+### GCM : Galois/Counter Mode (AEAD)
+| 特徴 | 内容 |
+|------|------|
+| 仕組み | CTR モードで暗号化しつつ、GF(2^128) 乗算でタグ(MAC)生成
+| 必須 | **Nonce** (12byte が主流) を一意に採番
+| 長所 | 暗号 + 認証 を同時提供（AEAD）。並列化・ハードウェア対応で高速
+| 短所 | Nonce 再利用で致命的に破綻
+| 採用例 | TLS1.2/1.3, SSH, HTTP/3, WireGuard, WebAuthn
+
+```text
+C_i = P_i ⊕ AES_k(CTR+i)
+Tag = GHASH(C||AAD)
+```
+
+## どちらを選ぶ？
+- **新規実装 → GCM 一択** (もしくは ChaCha20-Poly1305 など AEAD)
+- CBC はレガシー互換用。使うなら *必ず HMAC で認証* を。
+
+## 実装の落とし穴チェックリスト
+1. [ ] 鍵は定期ローテート & 管理を KMS/HSM に委譲
+2. [ ] IV/Nonce は毎回ランダム or カウンタで非再利用を保証
+3. [ ] パディングは PKCS#7 をライブラリ任せ（CBC）
+4. [ ] AES-NI / ARMv8 CE など CPU 命令セットを利用し、サイドチャネル低減
+5. [ ] 例外処理でエラー情報を漏らさない（Oracle 化防止）
+
+---
+### 参考
+- NIST FIPS-197, SP 800-38A/B/D/G
+- R. Garbis, *Real-World Cryptography* (Manning, 2021)
+- ぷらぷら暗号ブログ「AES モード比較」
+
+*Generated 2025-04- by LLM*

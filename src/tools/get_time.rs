@@ -1,20 +1,17 @@
-use call_agent::chat::function::Tool;
+
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use log::info;
 use std::collections::HashMap;
 
+use crate::{context::ObserverContext, lmclient::LMTool};
+
+#[derive(Default)]
 pub struct GetTime {}
 
 impl GetTime {
     pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Default for GetTime {
-    fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
@@ -97,43 +94,40 @@ impl GetTime {
         let utc_now: DateTime<Utc> = Utc::now();
         let local_time = utc_now.with_timezone(tz);
 
-        Ok(format!(
-            "The current time in {} ({}) is: {}",
-            country_code, tz, local_time
-        ))
+        Ok(format!("The current time in {} ({}) is: {}", country_code, tz, local_time))
     }
 }
 
-impl Tool for GetTime {
-    fn def_name(&self) -> &str {
-        "get_location_time"
+#[async_trait::async_trait]
+impl LMTool for GetTime {
+    fn name(&self) -> String {
+        "get-location-time".to_string()
     }
 
-    fn def_description(&self) -> &str {
-        "Get the current time of the location based on the country code"
+    fn description(&self) -> String {
+        "Get the current time of the location based on the country code".to_string()
     }
 
-    fn def_parameters(&self) -> serde_json::Value {
+    fn json_schema(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
             "properties": {
                 "country_code": {
                     "type": "string",
                     "description": "ISO 3166-1 alpha-2 country code (e.g., 'US', 'JP', 'FR')"
+                },
+                "$explain": {
+                    "type": "string",
+                    "description": "A brief explanation of what you are doing with this tool."
                 }
-            },
-            "$explain": {
-                "type": "string",
-                "description": "A brief explanation of what you are doing with this tool."
             },
             "required": ["country_code"]
         })
     }
 
-    fn run(&self, args: serde_json::Value) -> Result<String, String> {
+    async fn execute(&self, args: serde_json::Value, _ob_ctx: ObserverContext) -> Result<String, String> {
         info!("GetTime::run called with args: {:?}", args);
-        let country_code = args
-            .get("country_code")
+        let country_code = args.get("country_code")
             .and_then(|v| v.as_str())
             .ok_or("Missing or invalid 'country_code' parameter".to_string())?;
 

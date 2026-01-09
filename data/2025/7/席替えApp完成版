@@ -1,0 +1,179 @@
+# 席替えWebApp完成版 — シーン遷移＋プリセット＋希望席対応
+
+以下の3ファイルを保存し、同じフォルダに置けば動作する完成版です。
+
+---
+## index.html
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>席替えApp 完成版</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>席替えApp 完成版</h1>
+  <!-- I. 席形状編集 -->
+  <section id="scene1" class="scene">
+    <h2>Ⅰ. 席の形を指定</h2>
+    <label>行: <input id="rows-input" type="number" value="7" min="1"></label>
+    <label>列: <input id="cols-input" type="number" value="6" min="1"></label>
+    <button id="apply-grid">適用</button>
+    <div id="grid-editor"></div>
+    <button id="to2">→ 次へ</button>
+  </section>
+
+  <!-- II. プリセット -->
+  <section id="scene2" class="scene hidden">
+    <h2>Ⅱ. プリセット作成</h2>
+    <button id="new-preset">New Preset</button>
+    <div id="preset-list"></div>
+    <button id="back1">← 戻る</button>
+    <button id="to3">→ 次へ</button>
+  </section>
+
+  <!-- III. 名簿入力 -->
+  <section id="scene3" class="scene hidden">
+    <h2>Ⅲ. 名簿 & 希望</h2>
+    <textarea id="roster-input" placeholder="改行区切りで名前を入力"></textarea><br>
+    <button id="load-roster">名簿読み込み</button>
+    <div id="roster-ui"></div>
+    <button id="back2">← 戻る</button>
+    <button id="to4">→ 次へ</button>
+  </section>
+
+  <!-- IV. 結果表示 -->
+  <section id="scene4" class="scene hidden">
+    <h2>Ⅳ. 配置結果</h2>
+    <button id="run-assign">再実行</button>
+    <div id="result-grid"></div>
+    <button id="back3">← 戻る</button>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
+```
+
+---
+## style.css
+```css
+body{font-family:sans-serif;padding:20px;}h2{margin-top:20px;}button,input,textarea{margin:5px;}textarea{width:100%;height:100px;}table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:4px;}select,input{width:100%;}
+#grid-editor,#result-grid{display:grid;grid-gap:2px;margin:10px 0;} .cell{width:30px;height:30px;border:1px solid #888;display:flex;align-items:center;justify-content:center;cursor:pointer;} .cell.seat{background:#ddd;} .cell.empty{background:#fff;} .cell.assigned{background:#aaf;}
+.scene{display:none;} .scene:not(.hidden){display:block;}
+```
+
+---
+## script.js
+```js
+// シーン定義
+const scenes={
+  1:document.getElementById('scene1'),
+  2:document.getElementById('scene2'),
+  3:document.getElementById('scene3'),
+  4:document.getElementById('scene4')
+};
+function showScene(n){
+  Object.values(scenes).forEach(s=>s.classList.add('hidden'));
+  scenes[n].classList.remove('hidden');
+}
+document.addEventListener('DOMContentLoaded',()=>showScene(1));
+
+// グリッド編集
+let ROWS, COLS, gridMask;
+const rowsIn = document.getElementById('rows-input');
+const colsIn = document.getElementById('cols-input');
+const gridEd = document.getElementById('grid-editor');
+function initGrid(){
+  ROWS=+rowsIn.value; COLS=+colsIn.value;
+  gridMask=Array.from({length:ROWS},()=>Array(COLS).fill(1));
+  renderGrid();
+}
+function renderGrid(){
+  gridEd.style.gridTemplateColumns=`repeat(${COLS},30px)`;
+  gridEd.innerHTML='';
+  gridMask.forEach((r,i)=>r.forEach((v,j)=>{
+    const d=document.createElement('div');
+    d.className=`cell ${v? 'seat':'empty'}`;
+    d.onclick=()=>{gridMask[i][j]^=1;d.classList.toggle('seat');d.classList.toggle('empty');};
+    gridEd.appendChild(d);
+  }));
+}
+document.getElementById('apply-grid').onclick=initGrid;
+initGrid();
+document.getElementById('to2').onclick=()=>showScene(2);
+
+// プリセット
+const presets={};
+function updatePresets(){
+  const pl=document.getElementById('preset-list');pl.innerHTML='';
+  Object.keys(presets).forEach(name=>{
+    const b=document.createElement('button');b.textContent=name;
+    b.onclick=()=>{gridMask=JSON.parse(JSON.stringify(presets[name]));renderGrid();};
+    pl.appendChild(b);
+  });
+}
+document.getElementById('new-preset').onclick=()=>{
+  const n=prompt('名前');if(!n) return;
+  presets[n]=JSON.parse(JSON.stringify(gridMask));
+  updatePresets();
+};
+document.getElementById('back1').onclick=()=>showScene(1);
+document.getElementById('to3').onclick=()=>showScene(3);
+
+// 名簿 & 希望
+let roster=[];
+const rosterUI=document.getElementById('roster-ui');
+document.getElementById('load-roster').onclick=()=>{
+  roster=rosterInput.value.split('\n').filter(s=>s).map(n=>({name:n,pref:'front'}));
+  const t=document.createElement('table');
+  t.innerHTML='<tr><th>名前</th><th>希望</th></tr>';
+  roster.forEach((s,i)=>{
+    const tr=document.createElement('tr');tr.innerHTML=
+      `<td><input value="${s.name}"></td><td>
+       <select><option value=front>前</option><option value=window>窓</option>
+       <option value=aisle>廊下</option><option value=ac>エアコン</option></select>
+       </td>`;
+    tr.querySelector('input').onchange=e=>roster[i].name=e.target.value;
+    tr.querySelector('select').onchange=e=>roster[i].pref=e.target.value;
+    t.appendChild(tr);
+  });rosterUI.innerHTML='';rosterUI.appendChild(t);
+};
+document.getElementById('back2').onclick=()=>showScene(2);
+document.getElementById('to4').onclick=()=>showScene(4);
+
+// 席替えロジック
+const defMasks={
+  ac:['000000','001110','001110','000000','001110','001110','000000'],
+  front:['011110','011110','000000','000000','000000','000000','000000'],
+  window:['110000','110000','110000','110000','110000','110000','110000'],
+  aisle:['000010','000011','000011','000011','000011','000011','000010']
+};
+function mask2Arr(a){return a.map(r=>r.split('').map(Number));}
+function coordsFrom(mask){const out=[];mask.forEach((r,i)=>r.forEach((v,j)=>v&&out.push([i,j])));return out;}
+
+function assign(){
+  let avail=new Set();coordsFrom(gridMask).forEach(rc=>avail.add(rc.join(',')));
+  const pats={};for(let k in defMasks)pats[k]=coordsFrom(mask2Arr(defMasks[k]));
+  const res={}; roster.forEach(s=>{
+    let c=pats[s.pref].filter(rc=>avail.has(rc.join(',')));
+    let pick=c.length?c[Math.floor(Math.random()*c.length)]:Array.from(avail).map(x=>x.split(',').map(Number))[0];
+    res[s.name]=pick;avail.delete(pick.join(','));
+  }); renderResult(res);
+}
+document.getElementById('run-assign').onclick=assign;
+
+// 結果描画
+const resultGrid=document.getElementById('result-grid');
+function renderResult(res){
+  resultGrid.style.gridTemplateColumns=`repeat(${COLS},30px)`;
+  resultGrid.innerHTML='';
+  for(let i=0;i<ROWS;i++)for(let j=0;j<COLS;j++){
+    const d=document.createElement('div');d.className='cell';
+    const f=Object.entries(res).find(([,v])=>v[0]==i&&v[1]==j);
+    if(f){d.textContent=f[0];d.classList.add('assigned');}
+    resultGrid.appendChild(d);
+  }
+}
+```

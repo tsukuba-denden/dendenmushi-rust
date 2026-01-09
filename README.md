@@ -3,6 +3,9 @@
 <h1 style="font-size: 50px">Dendenmushi</h1>
 </div>
 
+# dev branch はREADMEはめちゃくちゃになります
+
+ローカルでビルドしてつかうときはクローラークレートにstandaloneつける
 
 Dendenmushiは、自然な会話と高度なツール連携を提供する多機能なAIチャットボットであるObserver Discord Bot(このボットは、OpenAIのGPTモデルをベースにしており、ユーザーとの対話を通じて様々なタスクを実行する。)をフォークして作られています。
 Google AI StudioのGemini API Keyを用いることができるようになりました。
@@ -27,8 +30,8 @@ Google AI StudioのGemini API Keyを用いることができるようになり�
   - [x] システムメッセージの改善
 - 最適化 2
   - [x] web検索機能強化
-  - [ ] 画像読み込みの最適化
-  - [ ] 突然discordから切断される問題の解決
+  - [x] 画像読み込みの最適化
+  - [x] 突然discordから切断される問題の解決
 
 ## 主な機能
 

@@ -1,0 +1,59 @@
+# Mozilla/5.0 それは互換性の歴史、あるいは騙し合いの歴史
+
+**推定読了時間：4分**
+
+## はじめに
+
+「Mozilla/5.0」と聞くと、ブラウザのUser-Agent文字列に毎回含まれるお決まりフレーズとして馴染み深いはずです。しかし、その裏にはWeb標準への歩み寄り、ブラウザ間の互換性問題、そして“騙し合い”とも言える歴史が隠されています。本記事では、その誕生から現在まで――開発者とサイト運営者が繰り広げた駆け引きを中心に解説します。
+
+---
+
+## 1. User-Agent文字列の起源と“Mozilla”の誕生
+
+- **User-Agentとは？**
+  - HTTPリクエストでブラウザの名前やバージョン、OS情報などを知らせるための文字列
+
+- **Netscape Navigator時代**
+  - 1994年、Netscape社のNavigatorが登場。サイト側は“Mozilla”というキーワードをチェックし、動的機能の提供を判断。
+  - その後IE（Internet Explorer）が勢力を伸ばし、サイトは「Mozilla互換」かどうかで分岐し始めた。
+
+## 2. 「5.0」の意味と広がり
+
+- Netscapeの後継製品を示すバージョン番号として「5.0」が設定されるはずだったが、実際には登場せず。
+- Mozilla Foundation誕生後、Firefoxを出す際にブラウザ互換性を確保するため「Mozilla/5.0」をUser-Agentに採用。
+- 以降、Chrome、Safari、Edgeなど多くのブラウザが「Mozilla/5.0」を名乗るようになり、事実上の「業界標準」へ。
+
+## 3. 互換性の名の下の“騙し合い”
+
+- **“Sniffing” (スニッフィング) の罠**
+  - サイト側がUser-Agentを解析し、機能制限や最適化を切り替えるスクリプトを埋め込む慣習。
+  - 結果、User-Agentを偽装しないと新機能が使えない、特定ブラウザが排除されるなどの問題が頻発。
+
+- **偽装User-Agentの乱用**
+  - 開発者がデバッグ用や互換性テストでUser-Agentを偽装。次第に“常套手段”として蔓延。
+  - サイト側も「Mozilla/5.0前提」で機能を提供し、本来の判定ロジックを放棄。
+
+## 4. 標準化団体の対応と今後
+
+- **WHATWG・W3Cの取り組み**
+  - プログレッシブエンハンスメントやFeature-Policy（現Permissions-Policy）の導入。
+  - User-Agent Client Hintsの提案と段階的導入（Chromeを筆頭に実装中）。
+
+- **開発者への呼びかけ**
+  - User-Agent文字列依存の機能判定を避け、Feature Detectionを活用。
+  - ブラウザ検出に頼らない設計の重要性。
+
+## おわりに
+
+「Mozilla/5.0」は単なる文字列ではなく、Webの歴史と開発者同士のささやかな“騙し合い”を象徴する存在です。User-Agentに頼らず、機能を確実に検出する手法に移ることで、より健全なWebエコシステムを築けるでしょう。
+
+---
+
+**参考文献・リンク**
+
+1. Mozilla Developer Network (MDN): https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/User-Agent
+2. What is User-Agent? by HTTP Documentation: https://httpwg.org/specs/rfc7231.html#header.user-agent
+3. User-Agent Client Hints Proposal: https://wicg.github.io/ua-client-hints/
+4. "The user agent string": https://www.w3.org/Provider/Style/User_Info.html
+
+*執筆 2025年*

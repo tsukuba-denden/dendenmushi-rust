@@ -1,0 +1,108 @@
+# NeoForge: 2点を結ぶビルボードパーティクルを幅1で描く render()
+
+指定した2点 A→B を結ぶ帯状(クワッド)を、常にカメラに対してビルボードになるよう横幅1.0で描く `Particle#render(...)` の実装例です。Minecraft 1.20+ 付近の NeoForge/Vanilla API を想定しています。
+
+ポイント
+- カメラ位置でワールド座標→ビュー相対座標に変換
+- 線分方向 `dir = B - A`
+- カメラ視線ベクトル `view = camera.getLookVector()`
+- 幅方向ベクトル `side = normalize(dir) × normalize(view)` を使い、半幅 `0.5` を掛ける
+- 4頂点: A-side, A+side, B+side, B-side の順で送る（面の表裏は必要に応じて反転）
+- UV はパーティクルスプライトのフル矩形を使用
+
+想定クラス
+- このパーティクルは `TextureSheetParticle` or `Particle` を継承し、`this.getSprite()` で `TextureAtlasSprite` を得られるとします（`setSprite(...)` 済み）。
+
+コード
+```java
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.Camera;
+import net.minecraft.client.particle.Particle;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+
+public class SegmentBillboardParticle extends Particle {
+    private final Vec3 a;   // 始点（ワールド座標）
+    private final Vec3 b;   // 終点（ワールド座標）
+    private final float width = 1.0f; // 要件: 幅1
+
+    // ... コンストラクタなどで a, b を受け取る想定
+
+    @Override
+    public void render(VertexConsumer vc, Camera camera, float partialTicks) {
+        // カメラ相対へ
+        final Vec3 cam = camera.getPosition();
+        final Vec3 A = a.subtract(cam);
+        final Vec3 B = b.subtract(cam);
+
+        // 線分方向
+        Vec3 dir = B.subtract(A);
+        double len2 = dir.lengthSqr();
+        if (len2 < 1.0e-8) {
+            // AとBがほぼ同一点なら何もしない（点レンダで代替するなど）
+            return;
+        }
+        dir = dir.normalize();
+
+        // カメラ視線
+        Vec3 view = camera.getLookVector().normalize();
+
+        // 幅方向（dirとviewに直交）
+        Vec3 side = dir.cross(view);
+        double sideLen2 = side.lengthSqr();
+        if (sideLen2 < 1.0e-8) {
+            // カメラ視線と線分がほぼ平行だと side が退化する
+            // その場合は別軸を混ぜて安定化
+            // 例: ワールド上向き(0,1,0)と組み合わせ
+            Vec3 up = new Vec3(0.0, 1.0, 0.0);
+            side = dir.cross(up);
+            if (side.lengthSqr() < 1.0e-8) {
+                // それでも駄目なら X軸を使う
+                up = new Vec3(1.0, 0.0, 0.0);
+                side = dir.cross(up);
+            }
+        }
+        side = side.normalize().scale(width * 0.5);
+
+        // 4頂点（A→B が縦、幅方向が ±side）
+        Vec3 v0 = A.subtract(side); // A - side
+        Vec3 v1 = A.add(side);      // A + side
+        Vec3 v2 = B.add(side);      // B + side
+        Vec3 v3 = B.subtract(side); // B - side
+
+        // UV（スプライト全面）
+        TextureAtlasSprite sprite = this.getSprite();
+        float u0 = sprite.getU0();
+        float u1 = sprite.getU1();
+        float v0u = sprite.getV0();
+        float v1u = sprite.getV1();
+
+        // 色と光源
+        int light = this.getLightColor(partialTicks); // 例: Particleの標準ヘルパー
+        float r = this.rCol;
+        float g = this.gCol;
+        float bcol = this.bCol;
+        float aCol = this.alpha;
+
+        // クワッドを反時計回りで送る（表面の向きは用途次第で並び替えてOK）
+        // v0(A-side) -> v1(A+side) -> v2(B+side) -> v3(B-side)
+        vc.vertex(v0.x, v0.y, v0.z).uv(u0, v0u).color(r, g, bcol, aCol).uv2(light).endVertex();
+        vc.vertex(v1.x, v1.y, v1.z).uv(u1, v0u).color(r, g, bcol, aCol).uv2(light).endVertex();
+        vc.vertex(v2.x, v2.y, v2.z).uv(u1, v1u).color(r, g, bcol, aCol).uv2(light).endVertex();
+        vc.vertex(v3.x, v3.y, v3.z).uv(u0, v1u).color(r, g, bcol, aCol).uv2(light).endVertex();
+    }
+}
+```
+
+補足
+- 粒子レンダーパイプはエンジン側で `VertexConsumer` が適切な RenderType を設定済みです（`Particle#render` 経由）。エンティティや独自描画から行う場合は `MultiBufferSource` から任意の `RenderType` を取り、同様の頂点列を送ればOK。
+- 退化ケース（カメラ視線と線分がほぼ平行）では `side` が0に近づくため、ワールド上向きベクトルでフォールバックしています。
+- 幅を動的にしたいなら `width` をフィールド化して調整してください。
+
+参考
+- Mojang mappings: Particle 実装（renderの頂点書き出し参考）
+  - https://github.com/MinecraftForge/MinecraftForge/blob/1.20.x/patches/minecraft/net/minecraft/client/particle/Particle.java.patch
+  - https://github.com/SpigotMC/Minecraft-Spigot decompiled sources may also help
+- NeoForge docs（Rendering/Particles 概要）
+  - https://neoforged.net/

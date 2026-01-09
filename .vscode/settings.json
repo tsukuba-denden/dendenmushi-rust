@@ -1,3 +1,5 @@
 {
+    "jpLsp.applyAllLanguages": false,
+    "jpLsp.semantic.enable": false,
     "python-envs.defaultEnvManager": "ms-python.python:system"
 }

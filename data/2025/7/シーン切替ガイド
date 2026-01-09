@@ -1,0 +1,85 @@
+# シーン切替付き 席替えUI導入ガイド
+
+Vanilla JSのみで、
+1. シーンごとに入力画面を切り替え
+2. Next/Backで遷移しながら設定・実行
+
+を実装する手順です。 
+
+## HTML構成例
+```html
+<body>
+  <!-- Scene1: グリッド編集 -->
+  <section id="scene1" class="scene">
+    <h2>Ⅰ. 席の形を指定</h2>
+    <!-- 行列入力・グリッドUI -->
+    <button id="to2">→ 次へ</button>
+  </section>
+
+  <!-- Scene2: プリセット -->
+  <section id="scene2" class="scene">
+    <h2>Ⅱ. プリセット作成</h2>
+    <!-- プリセットUI -->
+    <button id="back1">← 戻る</button>
+    <button id="to3">→ 次へ</button>
+  </section>
+
+  <!-- Scene3: 名簿 & 希望 -->
+  <section id="scene3" class="scene">
+    <h2>Ⅲ. 名簿 & 希望席</h2>
+    <!-- 名簿入力UI -->
+    <button id="back2">← 戻る</button>
+    <button id="to4">→ 次へ（実行）</button>
+  </section>
+
+  <!-- Scene4: 結果表示 -->
+  <section id="scene4" class="scene">
+    <h2>Ⅳ. 配置結果</h2>
+    <!-- 結果グリッド -->
+    <button id="back3">← 戻る</button>
+  </section>
+</body>
+```
+
+## CSS（シーン切替用）
+```css
+.scene { display: none; }
+.scene.active { display: block; }
+```
+
+## JavaScript（遷移ロジック）
+```js
+// シーン要素をIDで取得
+const scenes = {
+  1: document.getElementById('scene1'),
+  2: document.getElementById('scene2'),
+  3: document.getElementById('scene3'),
+  4: document.getElementById('scene4'),
+};
+
+// 遷移ボタン設定
+document.getElementById('to2').onclick = () => showScene(2);
+document.getElementById('back1').onclick = () => showScene(1);
+document.getElementById('to3').onclick = () => showScene(3);
+document.getElementById('back2').onclick = () => showScene(2);
+// 実行ボタン押下で assign() → Scene4
+document.getElementById('to4').onclick = () => { assign(); showScene(4); };
+document.getElementById('back3').onclick = () => showScene(3);
+
+// シーン切替関数
+function showScene(n) {
+  Object.values(scenes).forEach(sec => sec.classList.remove('active'));
+  scenes[n].classList.add('active');
+}
+
+// 初期表示はScene1
+document.addEventListener('DOMContentLoaded', () => showScene(1));
+```
+
+## 説明
+- HTMLで4つの`<section>`を用意し、`id="scene1"～scene4`。
+- CSSで`.scene`をhidden、`.scene.active`のみ表示。
+- Next/BackボタンをJSで紐付け、`showScene(n)`で切り替え。
+- 名簿→配置の`assign()`はScene3→4遷移時に呼び出し。
+
+以上でシンプルなシーン切替UIが実現できます。
