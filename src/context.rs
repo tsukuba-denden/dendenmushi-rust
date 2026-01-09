@@ -6,7 +6,7 @@ use openai_dive::v1::api::Client as OpenAIClient;
 use wk_371tti_net_crawler::Client as ScraperClient;
 use serenity::{Client as DiscordClient, all::GatewayIntents};
 
-use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, rate_config, set_system_prompt, tex_expr}, config::Config, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
+use crate::{channel::ChatContexts, commands::{clear, disable, enable, model, ping, rate_config, set_system_prompt, tex_expr}, config::{Config, ModelProvider}, events::event_handler, lmclient::{LMClient, LMTool}, tools, user::UserContexts};
 
 /// 全体共有コンテキスト
 /// Arcで実装されてるのでcloneは単に参照カウントの増加
@@ -59,7 +59,22 @@ impl ObserverContext {
         let config = Config::new();
 
         // ツールの定義
-        let lm_client = LMClient::new(OpenAIClient::new(config.openai_api_key.clone()));
+        let lm_client = match config.model_provider {
+            ModelProvider::OpenAI => {
+                let mut openai = OpenAIClient::new(config.main_model_api_key.clone());
+                // config の値は末尾に / が付いていることがあるので吸収
+                let endpoint = config.main_model_endpoint.trim_end_matches('/');
+                openai.set_base_url(endpoint);
+                LMClient::new_openai(openai)
+            }
+            ModelProvider::GeminiAIStudio => {
+                LMClient::new_gemini(
+                    config.main_model_endpoint.clone(),
+                    config.main_model_api_key.clone(),
+                    config.main_model_name.clone(),
+                )
+            }
+        };
         let tools: HashMap<String, Box<dyn LMTool>> = vec![
             Box::new(tools::get_time::GetTime::new()) as Box<dyn LMTool>,
             Box::new(tools::browser::Browser::new()) as Box<dyn LMTool>,

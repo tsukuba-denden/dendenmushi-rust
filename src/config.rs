@@ -1,14 +1,37 @@
-
-use std::fmt::Display;
+use std::{fmt::Display, fs, path::Path};
 
 use openai_dive::v1::resources::{response::{request::ResponseParametersBuilder, response::ResponseReasoning}, shared::ReasoningEffort};
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelProvider {
+    OpenAI,
+    GeminiAIStudio,
+}
+
+impl ModelProvider {
+    fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_lowercase().as_str() {
+            "openai" => Some(Self::OpenAI),
+            "gemini" | "aistudio" | "gemini_aistudio" | "gemini-ai-studio" => Some(Self::GeminiAIStudio),
+            _ => None,
+        }
+    }
+}
 
 /// 設定
-/// まだserdeかいてないのでそのままinlineで記述してる
+/// env もしくは config.json からロードされる
 #[derive(Clone)]
 pub struct Config {
     pub discord_token: String,
-    pub openai_api_key: String,
+    /// 利用するモデルプロバイダ
+    pub model_provider: ModelProvider,
+    /// APIキー（OpenAIなら Bearer、Gemini AI Studioなら query の key）
+    pub main_model_api_key: String,
+    /// OpenAI互換APIのベースURL (例: https://api.openai.com/v1)
+    pub main_model_endpoint: String,
+    /// プロバイダ固有のモデル名 (Gemini例: gemini-flash-latest)
+    pub main_model_name: String,
     pub system_prompt: String,
     pub rale_limit_window_size: u64,
     pub rate_limit_sec_per_cost: u64,
@@ -21,12 +44,89 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Self {
-        let discord_token =
-            std::env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
-        let openai_api_key =
-            std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
-        let system_prompt =
-            std::env::var("SYSTEM_PROMPT").unwrap_or_else(|_| 
+        dotenv::dotenv().ok();
+
+        let file_cfg = FileConfig::load_from_default_path();
+
+        let web_server_port = std::env::var("WEB_SERVER_PORT")
+            .ok()
+            .and_then(|s| s.trim().parse::<u16>().ok())
+            .or_else(|| file_cfg.as_ref().and_then(|c| c.web_server_port));
+
+        let discord_token = std::env::var("DISCORD_TOKEN")
+            .ok()
+            .and_then(non_empty_non_placeholder)
+            .or_else(|| file_cfg.as_ref().and_then(|c| c.discord_token.clone()).and_then(non_empty_non_placeholder))
+            .expect("DISCORD_TOKEN must be set (env DISCORD_TOKEN or config.json discord_token)");
+
+        let main_model_api_key = std::env::var("MAIN_MODEL_API_KEY")
+            .ok()
+            .and_then(non_empty_non_placeholder)
+            // 互換のため残す
+            .or_else(|| std::env::var("OPENAI_API_KEY").ok().and_then(non_empty_non_placeholder))
+            .or_else(|| {
+                file_cfg
+                    .as_ref()
+                    .and_then(|c| c.model.as_ref())
+                    .and_then(|m| m.main_model_api_key.clone())
+                    .and_then(non_empty_non_placeholder)
+            })
+            .expect("MAIN_MODEL_API_KEY must be set (env MAIN_MODEL_API_KEY/OPENAI_API_KEY or config.json model.main_model_api_key)");
+
+        let main_model_endpoint = std::env::var("MAIN_MODEL_ENDPOINT")
+            .ok()
+            .and_then(non_empty_non_placeholder)
+            .or_else(|| {
+                file_cfg
+                    .as_ref()
+                    .and_then(|c| c.model.as_ref())
+                    .and_then(|m| m.main_model_endpoint.clone())
+                    .and_then(non_empty_non_placeholder)
+            })
+            .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+
+        let model_provider = std::env::var("MAIN_MODEL_PROVIDER")
+            .ok()
+            .and_then(non_empty_non_placeholder)
+            .as_deref()
+            .and_then(ModelProvider::parse)
+            .or_else(|| {
+                file_cfg
+                    .as_ref()
+                    .and_then(|c| c.model.as_ref())
+                    .and_then(|m| m.provider.as_deref())
+                    .and_then(ModelProvider::parse)
+            })
+            .unwrap_or_else(|| {
+                if main_model_endpoint.contains("generativelanguage.googleapis.com") {
+                    ModelProvider::GeminiAIStudio
+                } else {
+                    ModelProvider::OpenAI
+                }
+            });
+
+        let main_model_name = std::env::var("MAIN_MODEL_NAME")
+            .ok()
+            .and_then(non_empty_non_placeholder)
+            .or_else(|| {
+                file_cfg
+                    .as_ref()
+                    .and_then(|c| c.model.as_ref())
+                    .and_then(|m| m.model_name.clone())
+                    .and_then(non_empty_non_placeholder)
+            })
+            .unwrap_or_else(|| match model_provider {
+                ModelProvider::GeminiAIStudio => "gemini-flash-latest".to_string(),
+                ModelProvider::OpenAI => "gpt-5-nano".to_string(),
+            });
+
+        let system_prompt = std::env::var("SYSTEM_PROMPT").ok().and_then(non_empty_non_placeholder).or_else(|| {
+            file_cfg
+                .as_ref()
+                .and_then(|c| c.prompt.as_ref())
+                .and_then(|p| p.ask_developer_prompt.clone())
+                .and_then(non_empty_non_placeholder)
+        }).unwrap_or_else(||
 "上記のメッセージはDiscord内での会話です。
 時系列のメッセージタイムラインになっていて、あなたはこの内容から自然に応答します。
 あなたは Discord の BOT「Observer」で以上の会話を続けてください。
@@ -48,16 +148,68 @@ tool_call でない通常メッセージを送ると推論終了するので注�
 基本的に最後のメッセージに対して答えてください".to_string());
         Config {
             discord_token,
-            openai_api_key,
+            model_provider,
+            main_model_api_key,
+            main_model_endpoint,
+            main_model_name,
             system_prompt,
             rale_limit_window_size: 16200,
             rate_limit_sec_per_cost: 900,
             web_server_host: [0, 0, 0, 0],
             web_server_local_ip: [192, 168, 0, 26],
-            web_server_port: 96,
+            web_server_port: web_server_port.unwrap_or(8096),
             admin_users: vec![855371530270408725],
             timeout_millis: 100_000,
         }
+    }
+}
+
+fn non_empty_non_placeholder(s: String) -> Option<String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed == "YOUR_API_KEY" {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FileConfig {
+    #[serde(default)]
+    discord_token: Option<String>,
+    #[serde(default)]
+    web_server_port: Option<u16>,
+    #[serde(default)]
+    model: Option<FileModelConfig>,
+    #[serde(default)]
+    prompt: Option<FilePromptConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FileModelConfig {
+    #[serde(default)]
+    main_model_api_key: Option<String>,
+    #[serde(default)]
+    main_model_endpoint: Option<String>,
+    #[serde(default)]
+    model_name: Option<String>,
+    #[serde(default)]
+    provider: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct FilePromptConfig {
+    #[serde(default)]
+    ask_developer_prompt: Option<String>,
+}
+
+impl FileConfig {
+    fn load_from_default_path() -> Option<Self> {
+        let path = Path::new("config.json");
+        let s = fs::read_to_string(path).ok()?;
+        serde_json::from_str(&s).ok()
     }
 }
 

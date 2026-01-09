@@ -6,6 +6,7 @@ pub mod latex;
 // pub mod web_scraper;
 // pub mod memory;
 // pub mod text_len;
-// pub mod web_deploy;
+#[cfg(feature = "web-deploy-tool")]
+pub mod web_deploy;
 // pub mod image_captioner;
 // pub mod browsing_worker;

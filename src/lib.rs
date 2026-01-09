@@ -1,6 +1,7 @@
 pub mod context;
 pub mod commands;
 pub mod config;
+pub mod gemini;
 pub mod lmclient;
 pub mod channel;
 pub mod events;

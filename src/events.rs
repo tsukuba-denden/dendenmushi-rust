@@ -6,7 +6,7 @@ use serenity::all::{ActivityData, CreateMessage, EditMessage, FullEvent, Message
 use tokio::{sync::mpsc, time::sleep};
 
 
-use crate::{commands::log_err, context::ObserverContext, lmclient::LMContext};
+use crate::{commands::log_err, config::ModelProvider, context::ObserverContext, lmclient::LMContext};
 
 
 /// イベントハンドラ
@@ -236,11 +236,16 @@ async fn handle_message(
 
         let timeout_duration = Duration::from_millis(ob_context.config.timeout_millis);
 
+        let model_params = match ob_context.config.model_provider {
+            ModelProvider::OpenAI => Some(model.to_parameter()),
+            ModelProvider::GeminiAIStudio => None,
+        };
+
             
         tokio::select! {
             biased;
 
-            r = ob_context.lm_client.generate_response(ob_context.clone(), &context, Some(2000), Some(tools), Some(state_tx), Some(delta_tx), Some(model.to_parameter())) => {
+            r = ob_context.lm_client.generate_response(ob_context.clone(), &context, Some(2000), Some(tools), Some(state_tx), Some(delta_tx), model_params) => {
                 if let Err(e) = &r {
                     log_err("Error generating response", e.as_ref());
                     thinking_msg
@@ -296,13 +301,16 @@ async fn handle_message(
         // タイピング通知停止
         typing_handle.abort();
 
-        let model = ob_context.user_contexts.get_or_create(user_id).main_model;
+        let model_label = match ob_context.config.model_provider {
+            ModelProvider::OpenAI => ob_context.user_contexts.get_or_create(user_id).main_model.to_string(),
+            ModelProvider::GeminiAIStudio => ob_context.config.main_model_name.clone(),
+        };
 
         // 「Thinking...」を削除して最終回答を表示
         thinking_msg.delete(&ctx.http).await.ok();
 
         msg.channel_id
-            .send_message(&ctx.http, CreateMessage::new().content(format!("{}\n-# Reasoning done in {}ms, model: {}", text, elapsed, model)))
+            .send_message(&ctx.http, CreateMessage::new().content(format!("{}\n-# Reasoning done in {}ms, model: {}", text, elapsed, model_label)))
             .await?;
     }
 

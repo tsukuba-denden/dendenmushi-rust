@@ -36,3 +36,7 @@ chrono-tz = "0.10.4"
 codegen-units = 1
 lto = "off"
 
+[features]
+default = []
+web-deploy-tool = []
+

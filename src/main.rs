@@ -1,8 +1,9 @@
 use kurosabi::Kurosabi;
 use observer::context::ObserverContext;
+use std::{net::{Ipv4Addr, TcpListener}, process::ExitCode};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     dotenv::dotenv().ok();
     env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("debug")).ok();
 
@@ -10,6 +11,22 @@ async fn main() {
     let ob_ctx = ObserverContext::new().await;
 
     let config = ob_ctx.config.clone();
+
+    let bind_ip = Ipv4Addr::from(config.web_server_host);
+    if let Err(e) = TcpListener::bind((bind_ip, config.web_server_port)) {
+        eprintln!(
+            "failed to bind web server {}.{}.{}.{}:{} ({})\n\
+hint: use an unprivileged port (>= 1024), or set WEB_SERVER_PORT / config.json web_server_port",
+            config.web_server_host[0],
+            config.web_server_host[1],
+            config.web_server_host[2],
+            config.web_server_host[3],
+            config.web_server_port,
+            e
+        );
+        let _ = ob_ctx.shutdown().await;
+        return ExitCode::FAILURE;
+    }
 
     let mut kurosabi = Kurosabi::with_context(ob_ctx.clone());
 
@@ -41,4 +58,6 @@ async fn main() {
         eprintln!("engine shutdown error: {}", e);
     }
     println!("shutdown complete. Exiting.");
+
+    ExitCode::SUCCESS
 }

@@ -1,6 +1,7 @@
 {
     "assistant_name": "でんでんむし",
     "max_use_tool_count": 5,
+    "web_server_port": 8096,
     "model": {
         "model_generate_max_tokens": 4096,
         "main_model_endpoint": "https://api.openai.com/v1/",
