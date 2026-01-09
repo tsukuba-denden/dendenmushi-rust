@@ -62,15 +62,14 @@ async fn get_article_raw(
         let metadata = file.metadata().ok();
         let file_size = metadata.map(|m| m.len()).unwrap_or(0);
 
-        if let Some(range_header) = req.headers().get("Range") {
-            if let Ok(range) = range_header.to_str() {
-                if let Some(range) = range.strip_prefix("bytes=") {
+        if let Some(range_header) = req.headers().get("Range")
+            && let Ok(range) = range_header.to_str()
+                && let Some(range) = range.strip_prefix("bytes=") {
                     let parts: Vec<&str> = range.split('-').collect();
-                    if let (Some(start_str), Some(end_str)) = (parts.get(0), parts.get(1)) {
-                        if let (Ok(start), Ok(end)) =
+                    if let (Some(start_str), Some(end_str)) = (parts.first(), parts.get(1))
+                        && let (Ok(start), Ok(end)) =
                             (start_str.parse::<u64>(), end_str.parse::<u64>())
-                        {
-                            if start < file_size && end < file_size {
+                            && start < file_size && end < file_size {
                                 let mut buffer = vec![0; (end - start + 1) as usize];
                                 file.seek(SeekFrom::Start(start)).ok();
                                 file.read_exact(&mut buffer).ok();
@@ -81,11 +80,7 @@ async fn get_article_raw(
                                     ))
                                     .body(buffer);
                             }
-                        }
-                    }
                 }
-            }
-        }
 
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).ok();
@@ -266,7 +261,9 @@ impl Tool for WebDeploy {
         let self_clone = self.clone();
 
         let args_clone = args.clone();
-        let result = thread::spawn(move || {
+        
+
+        thread::spawn(move || {
             let rt = Runtime::new().expect("Failed to create runtime");
 
             let action = args_clone
@@ -304,8 +301,6 @@ impl Tool for WebDeploy {
             }
         })
         .join()
-        .map_err(|_| "Thread panicked".to_string())?;
-
-        result
+        .map_err(|_| "Thread panicked".to_string())?
     }
 }

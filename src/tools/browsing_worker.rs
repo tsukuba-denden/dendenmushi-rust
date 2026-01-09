@@ -88,7 +88,7 @@ impl Tool for BrowsingWorker {
 
         let result = std::thread::spawn(move || -> Result<String, String> {
             let rt = Runtime::new().expect("Failed to create runtime");
-            let messages = Vec::from(vec![
+            let messages = vec![
                 Message::System {
                     name: Some("owner".to_string()), 
                     content: "You are an excellent AI assistant who searches for web pages regarding the request content and faithfully summarizes the entire content of that page. Absolutely use the internet to research and compile information.Also, be sure to indicate the source (URL).".to_string() 
@@ -99,7 +99,7 @@ impl Tool for BrowsingWorker {
                         MessageContext::Text(query.clone()),
                     ],
                 }
-            ]);
+            ];
 
             // モデルに投げる
             let res: String = rt.block_on(async {
@@ -112,7 +112,7 @@ impl Tool for BrowsingWorker {
                     .response
                     .choices
                     .as_ref()
-                    .and_then(|choices| choices.get(0))
+                    .and_then(|choices| choices.first())
                     .and_then(|c| c.message.annotations.as_ref())
                     .and_then(|ann| ann.as_array())
                     .map(|arr| {
@@ -191,9 +191,9 @@ fn search_and_summarize(query: &str) -> Result<String, String> {
         links.dedup_by(|a, b| a.1 == b.1);
 
         // 先頭のリンクを簡易要約（本文の先頭を圧縮）
-        let summary = if let Some((top_title, top_link)) = links.get(0) {
+        let summary = if let Some((top_title, top_link)) = links.first() {
             let top_data = rt
-                .block_on(scraper.scrape_reqwest(&top_link, "p, h1, h2, h3, a"))
+                .block_on(scraper.scrape_reqwest(top_link, "p, h1, h2, h3, a"))
                 .ok();
             let brief = top_data
                 .map(|d| WebBrowser::compress_content(d, 0, 800))

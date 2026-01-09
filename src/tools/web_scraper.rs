@@ -193,6 +193,12 @@ pub struct Browser {
     client: Client,
 }
 
+impl Default for Browser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Browser {
     /// 新しいWebScraperインスタンスを生成する
     pub fn new() -> Self {
@@ -221,11 +227,10 @@ impl Browser {
             .map_err(|_| ScraperError::NetworkError)?;
 
         // ヘッダーにContent-Lengthがある場合、サイズをチェックする
-        if let Some(len) = response.content_length() {
-            if len > MAX_FILE_SIZE {
+        if let Some(len) = response.content_length()
+            && len > MAX_FILE_SIZE {
                 return Err(ScraperError::FileTooLargeError);
             }
-        }
 
         let content_type = response
             .headers()
@@ -312,7 +317,7 @@ impl Browser {
         // すべてのテキストとリンクをまとめる
         for item in content.items {
             combined_text.push_str(&item.text);
-            combined_text.push_str(" ");
+            combined_text.push(' ');
 
             if let Some(link) = item.link {
                 combined_text.push_str(&format!("({})", link));
@@ -323,7 +328,7 @@ impl Browser {
 
         // seek_posが文字数を超えていたら空文字を返す
         if seek_pos >= total_chars {
-            return format!("...<0 characters remaining>");
+            return "...<0 characters remaining>".to_string();
         }
 
         // seek_posから取得可能な文字数
@@ -449,15 +454,14 @@ For searching, use Bing."
         let scraper = self.clone();
 
         Browser::is_safe_url(&url)
-            .then(|| ())
+            .then_some(())
             .ok_or_else(|| "Are you try hacking me?".to_string())?;
 
         let result = std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             match mode.as_str() {
                 "reqwest" => rt
-                    .block_on(scraper.scrape_reqwest(&url, &selector))
-                    .or_else(|_| Err(ScraperError::Other("Playwright not available".to_string()))),
+                    .block_on(scraper.scrape_reqwest(&url, &selector)).map_err(|_| ScraperError::Other("Playwright not available".to_string())),
                 "playwright" => Err(ScraperError::Other("Playwright not available".to_string())),
                 _ => Err(ScraperError::UnknownError),
             }

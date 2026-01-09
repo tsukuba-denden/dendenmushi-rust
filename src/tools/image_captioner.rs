@@ -196,8 +196,7 @@ impl Tool for ImageCaptionerTool {
             let caption = res
                 .response
                 .choices
-                .ok_or_else(|| "Missing choices in response".to_string())?
-                .get(0)
+                .ok_or_else(|| "Missing choices in response".to_string())?.first()
                 .ok_or_else(|| "No choice available".to_string())?
                 .message
                 .content
