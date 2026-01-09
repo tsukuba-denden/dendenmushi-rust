@@ -5,7 +5,13 @@ use std::{net::{Ipv4Addr, TcpListener}, process::ExitCode};
 #[tokio::main]
 async fn main() -> ExitCode {
     dotenv::dotenv().ok();
-    env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("debug")).ok();
+    // NOTE: serenity 等が `target=tracing::span` でスパンイベントを log に流すことがあり、
+    // デフォルト `debug` だと `do_heartbeat;` / `recv_event;` などが大量に出て見づらくなる。
+    // RUST_LOG を明示しない場合だけ、`tracing::span` を warn 以上に絞って抑制する。
+    env_logger::try_init_from_env(
+        env_logger::Env::default().default_filter_or("debug,tracing::span=warn"),
+    )
+    .ok();
 
     // コンテキスト初期化
     let ob_ctx = ObserverContext::new().await;
