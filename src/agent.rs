@@ -35,8 +35,7 @@ pub struct ChannelState {
 /// モデルの種類を指定するための列挙型
 #[derive(Clone, Debug)]
 pub enum AIModel {
-    /// 自動選択（指定順でモデルをフォールバック）
-    Auto,
+    /// 自動選択（指定順でモデルをフォールバック）Auto,
     MO4Mini,
     MO3,
     M5Nano,
@@ -127,7 +126,9 @@ impl AIModel {
                 "gemini-1.5-flash: 高速マルチモーダル (Vision向け)".to_string()
             }
             AIModel::Gemini15Pro => "gemini-1.5-pro: 高性能推論".to_string(),
-            AIModel::GeminiFlashLatest => "gemini-flash-latest: 常に最新のFlash系 (将来の2.x/3.x系を自動追随)".to_string(),
+            AIModel::GeminiFlashLatest => {
+                "gemini-flash-latest: 常に最新のFlash系 (将来の2.x/3.x系を自動追随)".to_string()
+            }
             AIModel::Gemma327bIt => "gemma-3-27b-it: Google Gemma 3 27B IT".to_string(),
             AIModel::Gemma312bIt => "gemma-3-12b-it: Google Gemma 3 12B IT".to_string(),
             AIModel::Gemma34bIt => "gemma-3-4b-it: Google Gemma 3 4B IT".to_string(),
@@ -668,8 +669,9 @@ impl ChannelState {
             };
 
             // プロンプトストリームに分岐した部分をマージ（先頭のシステムプロンプトは消す）
-            let differential_stream =
-                prompt_stream.prompt.split_off(last_pos + 1 /* 先頭のシステムプロンプト消す */);
+            let differential_stream = prompt_stream.prompt.split_off(
+                last_pos + 1, /* 先頭のシステムプロンプト消す */
+            );
             {
                 let mut r_prompt_stream = self.prompt_stream.lock().await;
                 r_prompt_stream.add(differential_stream.into()).await;
