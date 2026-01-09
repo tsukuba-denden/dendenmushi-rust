@@ -18,6 +18,7 @@ impl LMClient {
         Self { client }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn generate_response(
         &self,
         ob_ctx: ObserverContext,
@@ -42,7 +43,7 @@ impl LMClient {
                 let _ = tx.clone().try_send(s);
             }
         };
-        let tool_defs = tools.iter().map(|(_name, tool)| tool.define()).collect::<Vec<ResponseTool>>();
+        let tool_defs = tools.values().map(|tool| tool.define()).collect::<Vec<ResponseTool>>();
 
 
         let per_parameters = parameters.unwrap_or_else(|| {
@@ -94,11 +95,11 @@ impl LMClient {
 
                     ResponseStreamEvent::ResponseFailed { sequence_number, response } => {
                         error!("Response failed (seq {}): {:?}", sequence_number, response);
-                        return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Response failed")));
+                        return Err(Box::new(std::io::Error::other("Response failed")));
                     },
                     ResponseStreamEvent::ResponseIncomplete { sequence_number, response } => {
                         error!("Response incomplete (seq {}): {:?}", sequence_number, response);
-                        return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Response incomplete")));
+                        return Err(Box::new(std::io::Error::other("Response incomplete")));
                     },
 
                     ResponseStreamEvent::ResponseOutputItemDone { sequence_number: _, output_index: _, item } => {
@@ -115,27 +116,27 @@ impl LMClient {
                             ResponseOutput::FunctionToolCall(function_tool_call) => {
                             state_send(format!("Function tool call: {}", function_tool_call.name));
                                 delta_context.add_input_item(InputItem::FunctionToolCall(
-                                    function_tool_call.into()
+                                    function_tool_call
                                 ));
                             },
                             ResponseOutput::FileSearchToolCall(file_search_tool_call) => {
                                 delta_context.add_input_item(InputItem::FileSearchToolCall(
-                                    file_search_tool_call.into()
+                                    file_search_tool_call
                                 ));
                             },
                             ResponseOutput::WebSearchToolCall(web_search_tool_call) => {
                                 delta_context.add_input_item(InputItem::WebSearchToolCall(
-                                    web_search_tool_call.into()
+                                    web_search_tool_call
                                 ));
                             },
                             ResponseOutput::ComputerToolCall(computer_tool_call) => {
                                 delta_context.add_input_item(InputItem::ComputerToolCall(
-                                    computer_tool_call.into()
+                                    computer_tool_call
                                 ));
                             },
                             ResponseOutput::Reasoning(reasoning) => {
                                 delta_context.add_input_item(InputItem::Reasoning(
-                                    reasoning.into()
+                                    reasoning
                                 ));
                             },
                             _ => {
@@ -155,14 +156,13 @@ impl LMClient {
                     },
 
                     ResponseStreamEvent::ResponseReasoningSummaryPartDone { sequence_number: _, item_id: _, output_index: _, summary_index: _, part } => {
-                        state_send(match part {
-                            ReasoningSummaryPart::SummaryText { text } => text,
-                        });
+                        let ReasoningSummaryPart::SummaryText { text } = part;
+                        state_send(text);
                     },
 
                     ResponseStreamEvent::Error { sequence_number, code, message, param } => {
                         error!("Error (seq {}): {} - {} ({:?})", sequence_number, code, message, param);
-                        return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, message)));
+                        return Err(Box::new(std::io::Error::other(message)));
                     },
                     _ => {
                         warn!("Unhandled stream event: {:?}", chunk);
@@ -243,6 +243,12 @@ pub struct LMContext {
     pub max_len: usize,
 }
 
+impl Default for LMContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LMContext {
     pub fn new() -> Self {
         Self {
@@ -303,7 +309,7 @@ impl LMContext {
                 content: ContentInput::List(vec![
                     ContentItem::Text { text },
                     ContentItem::Image {
-                        detail: detail,
+                        detail,
                         file_id: None,
                         image_url: Some(image_url),
                     }
@@ -334,11 +340,8 @@ impl LMContext {
                 },
                 ContentInput::List(items) => {
                     for item in items {
-                        match item {
-                            ContentItem::Text { text } => {
-                                result.push_str(text);
-                            },
-                            _ => {}
+                        if let ContentItem::Text { text } = item {
+                            result.push_str(text);
                         }
                     }
                 }
@@ -357,14 +360,14 @@ impl LMContext {
             }
         }).collect::<Vec<String>>();
 
-        self.buf.iter().filter_map(|item| {
-            if let ResponseInputItem::Item(InputItem::FunctionToolCall(call)) = item {
-                if !call_id_list.contains(&call.call_id) {
-                    return Some(call);
-                }
-            }
-            None
-        }).collect()
+        self.buf
+            .iter()
+            .filter_map(|item| match item {
+                ResponseInputItem::Item(InputItem::FunctionToolCall(call))
+                    if !call_id_list.contains(&call.call_id) => Some(call),
+                _ => None,
+            })
+            .collect()
     }
 }
 

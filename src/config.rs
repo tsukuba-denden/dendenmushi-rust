@@ -61,6 +61,12 @@ tool_call でない通常メッセージを送ると推論終了するので注�
     }
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// モデルリストの定義
 #[derive(Debug, Clone)]
 pub enum Models {
@@ -72,9 +78,9 @@ pub enum Models {
     Gpt5dot1CodexMini
 }
 
-impl Into<String> for Models {
-    fn into(self) -> String {
-        match self {
+impl From<Models> for String {
+    fn from(model: Models) -> Self {
+        match model {
             Models::Gpt5Mini => "gpt-5-mini".to_string(),
             Models::Gpt5Nano => "gpt-5-nano".to_string(),
             Models::Gpt5dot1 => "gpt-5.1".to_string(),

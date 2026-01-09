@@ -8,9 +8,15 @@ use crate::{context::ObserverContext, lmclient::LMTool};
 
 pub struct LatexExprRenderTool;
 
+impl Default for LatexExprRenderTool {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl LatexExprRenderTool {
     pub fn new() -> LatexExprRenderTool {
-        LatexExprRenderTool {}
+        Self
     }
 
     pub async fn render(expr: &str, ob_ctx: &ObserverContext) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
@@ -19,13 +25,15 @@ impl LatexExprRenderTool {
             port=ob_ctx.config.web_server_port,
             expr=expr
         );
-        let png = ob_ctx.scraper.capture_api(
-            CaptureAPIBuilder::new(&url)
-                .set_selector(".capture")
-                .set_wait_millis(200)
-                .build()
-        ).await;
-        png
+        ob_ctx
+            .scraper
+            .capture_api(
+                CaptureAPIBuilder::new(&url)
+                    .set_selector(".capture")
+                    .set_wait_millis(200)
+                    .build(),
+            )
+            .await
     }
 }
 

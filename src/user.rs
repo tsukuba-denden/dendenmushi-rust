@@ -8,6 +8,14 @@ pub struct UserContexts {
     pub contexts: DashMap<UserId, UserContext>,
 }
 
+impl Default for UserContexts {
+    fn default() -> Self {
+        Self {
+            contexts: DashMap::new(),
+        }
+    }
+}
+
 /// ユーザー情報の構造体
 #[derive(Clone)]
 pub struct UserContext {
@@ -28,9 +36,7 @@ impl UserContext {
 
 impl UserContexts {
     pub fn new() -> UserContexts {
-        UserContexts {
-            contexts: DashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn get_or_create(&self, user_id: UserId) -> UserContext {

@@ -4,7 +4,7 @@ use observer::context::ObserverContext;
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
-    env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("debug")).unwrap_or_else(|_| ());
+    env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("debug")).ok();
 
     // コンテキスト初期化
     let ob_ctx = ObserverContext::new().await;

@@ -10,9 +10,15 @@ use crate::lmclient::LMTool;
 
 pub struct DiscordTool;
 
+impl Default for DiscordTool {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl DiscordTool {
     pub fn new() -> DiscordTool {
-        DiscordTool {}
+        Self
     }
 
     fn get_str_arg<'a>(args: &'a serde_json::Value, key: &'a str) -> Result<&'a str, String> {

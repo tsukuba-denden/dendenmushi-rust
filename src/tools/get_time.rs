@@ -6,11 +6,12 @@ use std::collections::HashMap;
 
 use crate::{context::ObserverContext, lmclient::LMTool};
 
+#[derive(Default)]
 pub struct GetTime {}
 
 impl GetTime {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 

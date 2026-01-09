@@ -255,18 +255,14 @@ async fn handle_message(
             }
             _ = async {
                 let mut last_edit = Instant::now() + Duration::from_millis(550);      // 前回 edit した時間
-                let mut swap = String::new();          // 状態保存用バッファ
-
                 while let Some(state) = state_rx.recv().await {
-                    swap = state;
-
                     if last_edit.elapsed() < Duration::from_millis(550) {
                         continue;
                     }
 
                     // 1秒経過 → 最新 state だけ使って edit
                     thinking_msg
-                        .edit(&ctx.http, EditMessage::new().content(format!("-# {}", swap)))
+                        .edit(&ctx.http, EditMessage::new().content(format!("-# {}", state)))
                         .await
                         .ok();
                     last_edit = Instant::now(); // 時刻更新

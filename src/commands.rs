@@ -185,13 +185,13 @@ pub async fn enable(ctx: Context<'_>) -> Result<(), Error> {
 
     if ob_ctx.chat_contexts.is_enabled(channel_id) {
         ctx.say("info: Chat context is already enabled in this channel.").await?;
-        return Ok(());
+        Ok(())
     } else {
         ob_ctx.chat_contexts.set_enabled(channel_id, true);
         ob_ctx.chat_contexts.get_or_create(channel_id);
         ctx.say("info: Chat context enabled in this channel.").await?;
         info!("Enabled chat context for channel {}", channel_id);
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -204,12 +204,12 @@ pub async fn disable(ctx: Context<'_>) -> Result<(), Error> {
 
     if !ob_ctx.chat_contexts.is_enabled(channel_id) {
         ctx.say("info: Chat context is already disabled in this channel.").await?;
-        return Ok(());
+        Ok(())
     } else {
         ob_ctx.chat_contexts.set_enabled(channel_id, false);
         ctx.say("info: Chat context disabled in this channel.").await?;
         info!("Disabled chat context for channel {}", channel_id);
-        return Ok(());
+        Ok(())
     }
 }
 

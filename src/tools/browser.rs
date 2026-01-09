@@ -3,11 +3,12 @@ use wk_371tti_net_crawler::{ScraperAPIBuilder, schema::ScraperResult};
 
 use crate::{context::ObserverContext, lmclient::LMTool};
 
+#[derive(Default)]
 pub struct Browser {}
 
 impl Browser {
     pub fn new() -> Browser {
-        Browser {}
+        Browser::default()
     }
 }
 
