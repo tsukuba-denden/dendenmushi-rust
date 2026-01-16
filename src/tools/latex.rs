@@ -1,8 +1,9 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use serde_json::json;
 use serenity::all::{ChannelId, CreateAttachment, CreateMessage, MessageId};
-use wk_371tti_net_crawler::CaptureAPIBuilder;
+use reqwest::header::CONTENT_TYPE;
+use urlencoding::encode;
 
 use crate::{context::ObserverContext, lmclient::LMTool};
 
@@ -20,20 +21,56 @@ impl LatexExprRenderTool {
     }
 
     pub async fn render(expr: &str, ob_ctx: &ObserverContext) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+        let expr_encoded = encode(expr);
         let url = format!("http://{host}:{port}/latex_expr_render#{expr}",
             host=ob_ctx.config.web_server_local_ip.iter().map(|b| b.to_string()).collect::<Vec<String>>().join("."),
             port=ob_ctx.config.web_server_port,
-            expr=expr
+            expr=expr_encoded
         );
-        ob_ctx
-            .scraper
-            .capture_api(
-                CaptureAPIBuilder::new(&url)
-                    .set_selector(".capture")
-                    .set_wait_millis(200)
-                    .build(),
-            )
+
+        let base = ob_ctx.config.scraper_base_url.trim_end_matches('/');
+        let capture_url = format!(
+            "{base}/capture?url={}&selector={}&wait={}",
+            encode(&url),
+            encode(".capture"),
+            200
+        );
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_millis(ob_ctx.config.latex_capture_timeout_millis))
+            .build()?;
+
+        let resp = client
+            .get(capture_url)
+            .send()
             .await
+            .map_err(|e| {
+                format!(
+                    "failed to call capture server `{}` (set SCRAPER_BASE_URL or config.json `scraper_base_url`): {e}",
+                    base
+                )
+            })?;
+        let status = resp.status();
+        let content_type = resp
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+
+        if !status.is_success() || content_type.starts_with("text/") {
+            let text = resp.text().await.unwrap_or_else(|_| "<failed to read body>".to_string());
+            return Err(format!(
+                "capture API returned {} (content-type: {}): {}",
+                status,
+                content_type,
+                text
+            )
+            .into());
+        }
+
+        let bytes = resp.bytes().await?;
+        Ok(bytes.to_vec())
     }
 }
 

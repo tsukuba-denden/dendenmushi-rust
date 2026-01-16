@@ -277,6 +277,8 @@ pub async fn tex_expr(
     #[autocomplete = "autocomplete_tex_expr"]
     expr: String,
 ) -> Result<(), Error> {
+    // 画像生成や外部サービス呼び出しで時間がかかるので、まずdeferしてタイムアウトを防ぐ
+    ctx.defer().await?;
     let ob_ctx = ctx.data();
 
     // レンダリング実行（ヘッドレスブラウザ経由）

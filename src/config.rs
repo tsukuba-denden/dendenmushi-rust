@@ -38,6 +38,10 @@ pub struct Config {
     pub web_server_host: [u8; 4],
     pub web_server_local_ip: [u8; 4],
     pub web_server_port: u16,
+    /// Headless browser / capture server base URL (e.g. http://127.0.0.1:3000)
+    pub scraper_base_url: String,
+    /// Timeout for LaTeX capture requests
+    pub latex_capture_timeout_millis: u64,
     pub admin_users: Vec<u64>,
     pub timeout_millis: u64,
 }
@@ -52,6 +56,35 @@ impl Config {
             .ok()
             .and_then(|s| s.trim().parse::<u16>().ok())
             .or_else(|| file_cfg.as_ref().and_then(|c| c.web_server_port));
+
+        let web_server_local_ip = std::env::var("WEB_SERVER_LOCAL_IP")
+            .ok()
+            .and_then(non_empty_non_placeholder)
+            .and_then(|s| parse_ipv4_dotted(&s))
+            .or_else(|| {
+                file_cfg
+                    .as_ref()
+                    .and_then(|c| c.web_server_local_ip.as_deref())
+                    .and_then(parse_ipv4_dotted)
+            })
+            .unwrap_or([192, 168, 0, 26]);
+
+        let scraper_base_url = std::env::var("SCRAPER_BASE_URL")
+            .ok()
+            .and_then(non_empty_non_placeholder)
+            .or_else(|| {
+                file_cfg
+                    .as_ref()
+                    .and_then(|c| c.scraper_base_url.clone())
+                    .and_then(non_empty_non_placeholder)
+            })
+            .unwrap_or_else(|| "http://192.168.0.81".to_string());
+
+        let latex_capture_timeout_millis = std::env::var("LATEX_CAPTURE_TIMEOUT_MILLIS")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .or_else(|| file_cfg.as_ref().and_then(|c| c.latex_capture_timeout_millis))
+            .unwrap_or(15_000);
 
         let discord_token = std::env::var("DISCORD_TOKEN")
             .ok()
@@ -156,12 +189,26 @@ tool_call でない通常メッセージを送ると推論終了するので注�
             rale_limit_window_size: 16200,
             rate_limit_sec_per_cost: 900,
             web_server_host: [0, 0, 0, 0],
-            web_server_local_ip: [192, 168, 0, 26],
+            web_server_local_ip,
             web_server_port: web_server_port.unwrap_or(8096),
+            scraper_base_url,
+            latex_capture_timeout_millis,
             admin_users: vec![855371530270408725],
             timeout_millis: 100_000,
         }
     }
+}
+
+fn parse_ipv4_dotted(s: &str) -> Option<[u8; 4]> {
+    let mut iter = s.trim().split('.');
+    let a = iter.next()?.parse::<u8>().ok()?;
+    let b = iter.next()?.parse::<u8>().ok()?;
+    let c = iter.next()?.parse::<u8>().ok()?;
+    let d = iter.next()?.parse::<u8>().ok()?;
+    if iter.next().is_some() {
+        return None;
+    }
+    Some([a, b, c, d])
 }
 
 fn non_empty_non_placeholder(s: String) -> Option<String> {
@@ -181,6 +228,12 @@ struct FileConfig {
     discord_token: Option<String>,
     #[serde(default)]
     web_server_port: Option<u16>,
+    #[serde(default)]
+    web_server_local_ip: Option<String>,
+    #[serde(default)]
+    scraper_base_url: Option<String>,
+    #[serde(default)]
+    latex_capture_timeout_millis: Option<u64>,
     #[serde(default)]
     model: Option<FileModelConfig>,
     #[serde(default)]

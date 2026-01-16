@@ -79,7 +79,8 @@ impl ObserverContext {
             Box::new(tools::get_time::GetTime::new()) as Box<dyn LMTool>,
             Box::new(tools::browser::Browser::new()) as Box<dyn LMTool>,
             Box::new(tools::discord::DiscordTool::new()) as Box<dyn LMTool>,
-            Box::new(tools::latex::LatexExprRenderTool::new()) as Box<dyn LMTool>,
+            // (無効化) キャプチャサーバ未構築のため LaTeXレンダリングは無効
+            // Box::new(tools::latex::LatexExprRenderTool::new()) as Box<dyn LMTool>,
         ]
         .into_iter()
         .map(|tool| (tool.name(), tool))
@@ -87,7 +88,7 @@ impl ObserverContext {
 
         ObserverContext {
             lm_client: Arc::new(lm_client),
-            scraper: Arc::new(ScraperClient::new("http://192.168.0.81")),
+            scraper: Arc::new(ScraperClient::new(&config.scraper_base_url)),
             config: Arc::new(config.clone()),
             chat_contexts: Arc::new(ChatContexts::new(config.system_prompt.clone())),
             user_contexts: Arc::new(UserContexts::new()),
@@ -116,7 +117,7 @@ impl ContextMiddleware<ObserverContext> for ObserverContext {
                     clear(),
                     disable(),
                     model(),
-                    tex_expr(),
+                    // tex_expr(), // キャプチャサーバ未構築のため無効化
                     rate_config(),
                     set_system_prompt(),
                 ],
